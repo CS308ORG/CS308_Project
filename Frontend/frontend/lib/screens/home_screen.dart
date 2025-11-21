@@ -3,6 +3,26 @@ import '../services/api_service.dart';
 import 'login_screen.dart';
 import 'signup_screen.dart';
 
+/// Helper to read an image URL from the product map.
+/// This checks a few common field names so backend can choose one.
+String? getProductImageUrl(Map<String, dynamic> product) {
+  final keys = [
+    'imageUrl',
+    'image_url',
+    'image',
+    'thumbnailUrl',
+    'thumbnail_url',
+  ];
+
+  for (final key in keys) {
+    final value = product[key];
+    if (value is String && value.trim().isNotEmpty) {
+      return value;
+    }
+  }
+  return null;
+}
+
 class HomeScreen extends StatefulWidget {
   @override
   _HomeScreenState createState() => _HomeScreenState();
@@ -15,12 +35,30 @@ class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> _filteredProducts = [];
 
   // Search state
-  String _searchQuery = ''; // what is in the TextField right now
-  String _appliedQuery = ''; // last query that was confirmed with ENTER
+  String _searchQuery = ''; // what is currently typed
+  String _appliedQuery = ''; // last query confirmed with ENTER
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   List<dynamic> _suggestions = [];
   bool _showSuggestions = false;
+
+  // Category filter state
+  String? _selectedCategoryLabel;
+
+  /// Each category button uses EXACTLY ONE category_id
+  /// (a product may have multiple category_ids in the DB, e.g. [1, 5])
+  final Map<String, int> _categoryFilterIds = {
+    'Electronics': 1,
+    'Wear': 2, // Clothing
+    'Home Appliances': 3,
+    'Computers': 4,
+    'Audio': 5,
+    'Phones': 6, // Mobile
+    'Accessories': 7, // Kitchen / misc
+    'Gaming': 8,
+    'Sports': 9,
+    'Books': 10,
+  };
 
   bool _loading = true;
   String? _error;
@@ -57,6 +95,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _searchController.clear();
         _suggestions = [];
         _showSuggestions = false;
+        _selectedCategoryLabel = null;
         _loading = false;
       });
     } catch (e) {
@@ -67,7 +106,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // LIVE typing → only update suggestions
+  /// LIVE typing → only update suggestions, NOT the main grid.
   void _onSearchChanged(String value) {
     final query = value.trim().toLowerCase();
 
@@ -81,7 +120,7 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      // Filter products by name or description for suggestions
+      // Filter products by name or description for suggestions (from ALL products)
       final matches = _products.where((product) {
         final name = (product['name'] ?? '').toString().toLowerCase();
         final description = (product['description'] ?? '')
@@ -95,26 +134,14 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // ENTER → apply search to the main results page
+  /// Apply full search to the main results page (ENTER pressed).
   void _applySearch(String rawQuery) {
     final query = rawQuery.trim().toLowerCase();
 
     setState(() {
       _searchQuery = query;
       _appliedQuery = query;
-
-      if (query.isEmpty) {
-        _filteredProducts = List.from(_products);
-      } else {
-        _filteredProducts = _products.where((product) {
-          final name = (product['name'] ?? '').toString().toLowerCase();
-          final description = (product['description'] ?? '')
-              .toString()
-              .toLowerCase();
-          return name.contains(query) || description.contains(query);
-        }).toList();
-      }
-
+      _filteredProducts = _filterProducts(); // apply search + category
       _showSuggestions = false;
     });
 
@@ -122,56 +149,82 @@ class _HomeScreenState extends State<HomeScreen> {
     FocusScope.of(context).unfocus();
   }
 
-  // Old compact search bar (not used anymore, safe to delete if you want)
-  Widget _buildSearchBar() {
-    return Container(
-      color: Colors.white,
-      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      child: Center(
-        child: Container(
-          constraints: BoxConstraints(maxWidth: 600),
-          decoration: BoxDecoration(
-            color: Color(0xFFFFF9F0),
-            borderRadius: BorderRadius.circular(32),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black12,
-                blurRadius: 10,
-                offset: Offset(0, 4),
-              ),
-            ],
-          ),
-          child: TextField(
-            onChanged: _onSearchChanged,
-            style: TextStyle(fontSize: 16),
-            decoration: InputDecoration(
-              prefixIcon: Icon(Icons.search, color: Color(0xFFFF7733)),
-              hintText: 'Search products by name or description',
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 14,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+  /// Called when a category button is clicked.
+  /// NOW behaves like a "results state", not a toggle on/off.
+  void _onCategorySelected(String label) {
+    setState(() {
+      _selectedCategoryLabel = label; // no more toggling off
+      _filteredProducts = _filterProducts(); // show that category's results
+    });
   }
 
+  /// Resets everything to "home state" when clicking the logo.
+  void _resetToHome() {
+    setState(() {
+      _searchQuery = '';
+      _appliedQuery = '';
+      _searchController.clear();
+      _selectedCategoryLabel = null;
+      _filteredProducts = List.from(_products);
+      _suggestions = [];
+      _showSuggestions = false;
+    });
+    FocusScope.of(context).unfocus();
+  }
+
+  /// Combine category filter + applied search text.
+  List<dynamic> _filterProducts() {
+    List<dynamic> results = List.from(_products);
+
+    // 1) Category filter (if any)
+    final label = _selectedCategoryLabel;
+    if (label != null) {
+      final catId = _categoryFilterIds[label];
+      if (catId != null) {
+        results = results.where((product) {
+          // support both category_id (single) and category_ids (list)
+          final multi = product['category_ids'];
+          if (multi is List) {
+            final ids = multi.map((e) => e.toString()).toList();
+            if (ids.contains(catId.toString())) return true;
+          }
+          final single = product['category_id'];
+          if (single != null && single.toString() == catId.toString())
+            return true;
+          return false;
+        }).toList();
+      }
+    }
+
+    // 2) Applied search query (only when ENTER was pressed)
+    final query = _appliedQuery.trim().toLowerCase();
+    if (query.isNotEmpty) {
+      results = results.where((product) {
+        final name = (product['name'] ?? '').toString().toLowerCase();
+        final description = (product['description'] ?? '')
+            .toString()
+            .toLowerCase();
+        return name.contains(query) || description.contains(query);
+      }).toList();
+    }
+
+    return results;
+  }
+
+  /// When a suggestion is clicked in the dropdown.
   void _onSuggestionTap(Map<String, dynamic> product) {
     final selectedName = (product['name'] ?? '').toString();
 
     // Put the selected name into the search box
     _searchController.text = selectedName;
 
-    // Update suggestions state
+    // Update suggestion state for consistency
     _onSearchChanged(selectedName);
 
-    // Commit the search (filters the grid based on this product name)
+    // Commit the search (filters results)
     _applySearch(selectedName);
 
-    // Navigate to the product detail page (placeholder)
+    // Navigate to the product detail page
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -180,13 +233,14 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Search row + dropdown (with OLD visual style for suggestions)
+  /// Search row: elegant white box + filter button + dropdown underneath.
   Widget _buildSearchRow() {
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.symmetric(vertical: 16),
       child: Center(
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: 980), // slightly wider than nav
+          // Slightly wider than nav buttons group
+          constraints: const BoxConstraints(maxWidth: 980),
           child: Column(
             children: [
               Row(
@@ -197,7 +251,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(28),
-                        boxShadow: [
+                        boxShadow: const [
                           BoxShadow(
                             color: Colors.black12,
                             blurRadius: 18,
@@ -209,9 +263,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: TextField(
                         controller: _searchController,
                         focusNode: _searchFocusNode,
-                        onChanged: _onSearchChanged, // live suggestions
-                        onSubmitted: _applySearch, // apply search on ENTER
-                        style: TextStyle(fontSize: 16),
+                        onChanged: _onSearchChanged,
+                        onSubmitted: _applySearch,
+                        style: const TextStyle(fontSize: 16),
                         decoration: InputDecoration(
                           prefixIcon: Icon(
                             Icons.search,
@@ -219,7 +273,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           hintText: 'Search products by name or description',
                           border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(
+                          contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 14,
                           ),
@@ -227,15 +281,15 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-                  SizedBox(width: 12),
+                  const SizedBox(width: 12),
                   // Sort / filter button
                   Container(
                     width: 52,
                     height: 52,
                     decoration: BoxDecoration(
-                      color: Color(0xFFFF7733),
+                      color: const Color(0xFFFF7733),
                       borderRadius: BorderRadius.circular(26),
-                      boxShadow: [
+                      boxShadow: const [
                         BoxShadow(
                           color: Colors.black12,
                           blurRadius: 12,
@@ -243,27 +297,27 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ],
                     ),
-                    child: Icon(Icons.filter_list, color: Colors.white),
+                    child: const Icon(Icons.filter_list, color: Colors.white),
                   ),
                 ],
               ),
 
               // Spacing before dropdown
               if (_showSuggestions && _suggestions.isNotEmpty)
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
 
-              // Suggestions dropdown – VISUAL STYLE FROM OLD CODE
+              // Suggestions dropdown – same look as before
               if (_showSuggestions && _suggestions.isNotEmpty)
                 Container(
-                  constraints: BoxConstraints(maxHeight: 280),
+                  constraints: const BoxConstraints(maxHeight: 280),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: const [
                       BoxShadow(
                         color: Colors.black12,
-                        blurRadius: 10,
-                        offset: Offset(0, 4),
+                        blurRadius: 14,
+                        offset: Offset(0, 8),
                       ),
                     ],
                   ),
@@ -273,43 +327,58 @@ class _HomeScreenState extends State<HomeScreen> {
                     itemBuilder: (context, index) {
                       final product =
                           _suggestions[index] as Map<String, dynamic>;
-                      final price = product['price'];
+                      final imageUrl = getProductImageUrl(product);
 
                       return InkWell(
                         onTap: () => _onSuggestionTap(product),
                         child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
                           ),
                           child: Row(
                             children: [
-                              // Mini image (placeholder)
+                              // Mini image or placeholder
                               Container(
-                                width: 40,
-                                height: 40,
+                                width: 56,
+                                height: 56,
                                 decoration: BoxDecoration(
-                                  color: Color(0xFFFFF5E6),
-                                  borderRadius: BorderRadius.circular(8),
+                                  color: const Color(0xFFFFF5E6),
+                                  borderRadius: BorderRadius.circular(16),
                                 ),
-                                child: Icon(
-                                  Icons.computer,
-                                  size: 22,
-                                  color: Colors.grey[500],
+                                child: Center(
+                                  child: imageUrl != null
+                                      ? ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
+                                          child: Image.network(
+                                            imageUrl,
+                                            width: 56,
+                                            height: 56,
+                                            fit: BoxFit.cover,
+                                          ),
+                                        )
+                                      : Icon(
+                                          Icons.computer,
+                                          size: 28,
+                                          color: Colors.grey[500],
+                                        ),
                                 ),
                               ),
-                              SizedBox(width: 12),
-                              // Name + mini description
+                              const SizedBox(width: 16),
+                              // Title + mini description
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      product['name'] ?? '',
-                                      style: TextStyle(
+                                      product['name'] ?? 'Product',
+                                      style: const TextStyle(
+                                        fontSize: 16,
                                         fontWeight: FontWeight.w600,
-                                        fontSize: 14,
                                       ),
+                                      maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                     if ((product['description'] ?? '')
@@ -318,8 +387,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                       Text(
                                         product['description'],
                                         style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey[600],
+                                          fontSize: 13,
+                                          color: Colors.grey[700],
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -327,13 +396,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ],
                                 ),
                               ),
-                              SizedBox(width: 8),
-                              // Price on the right
-                              if (price != null)
+                              const SizedBox(width: 12),
+                              if (product['price'] != null)
                                 Text(
-                                  '$price ₺',
-                                  style: TextStyle(
-                                    fontSize: 12,
+                                  '${product['price']} ₺',
+                                  style: const TextStyle(
+                                    fontSize: 14,
                                     fontWeight: FontWeight.bold,
                                     color: Color(0xFFFF7733),
                                   ),
@@ -354,8 +422,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isHomeState =
+        _appliedQuery.isEmpty && _selectedCategoryLabel == null;
+
     return Scaffold(
-      backgroundColor: Color(0xFFFFF5E6),
+      backgroundColor: const Color(0xFFFFF5E6),
       body: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTap: () {
@@ -366,11 +437,10 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             _buildHeader(),
             _buildNavBar(),
-            _buildSearchRow(), // search + dropdown row
-
+            _buildSearchRow(),
             Expanded(
               child: _loading
-                  ? Center(
+                  ? const Center(
                       child: CircularProgressIndicator(
                         color: Color(0xFFFF7733),
                       ),
@@ -380,17 +450,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   : SingleChildScrollView(
                       child: Column(
                         children: [
-                          if (_appliedQuery.isEmpty) ...[
+                          if (isHomeState) ...[
                             // HOME STATE: hero + popular + pagination
                             _buildSaleBanner(),
                             _buildPopularSection(),
                             _buildPagination(),
                           ] else ...[
-                            // SEARCH RESULTS STATE: ONLY relevant items
-                            SizedBox(height: 24),
+                            // RESULTS STATE: either search or category (or both)
+                            const SizedBox(height: 24),
                             _buildSearchResultsGrid(),
                           ],
-                          SizedBox(height: 40),
+                          const SizedBox(height: 40),
                         ],
                       ),
                     ),
@@ -403,17 +473,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildHeader() {
     return Container(
-      color: Color(0xFFFFF5E6),
-      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      color: const Color(0xFFFFF5E6),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            'CS308 STORE',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFFFF7733),
+          // Logo with pointer cursor + click → go home
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: _resetToHome,
+              child: const Text(
+                'CS308 STORE',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFFFF7733),
+                ),
+              ),
             ),
           ),
           Row(
@@ -425,14 +502,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     MaterialPageRoute(builder: (context) => LoginScreen()),
                   );
                 },
-                child: Text('Login'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFFFF7733),
+                  backgroundColor: const Color(0xFFFF7733),
                   foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
                 ),
+                child: const Text('Login'),
               ),
-              SizedBox(width: 8),
+              const SizedBox(width: 8),
               OutlinedButton(
                 onPressed: () {
                   Navigator.push(
@@ -440,12 +520,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     MaterialPageRoute(builder: (context) => SignupScreen()),
                   );
                 },
-                child: Text('Sign Up'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Color(0xFFFF7733),
-                  side: BorderSide(color: Color(0xFFFF7733)),
-                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  foregroundColor: const Color(0xFFFF7733),
+                  side: const BorderSide(color: Color(0xFFFF7733)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
                 ),
+                child: const Text('Sign Up'),
               ),
             ],
           ),
@@ -454,23 +537,32 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Category bar: wraps into multiple centered lines on small screens.
   Widget _buildNavBar() {
+    final labels = [
+      'Electronics',
+      'Computers',
+      'Phones',
+      'Accessories',
+      'Gaming',
+      'Audio',
+      'Books',
+      'Wear',
+      'Home Appliances',
+      'Sports',
+    ];
+
     return Container(
       color: Colors.white,
-      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       child: Center(
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: 920), // nav width
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _navButton('Electronics'),
-              _navButton('Computers'),
-              _navButton('Phones'),
-              _navButton('Accessories'),
-              _navButton('Gaming'),
-              _navButton('Audio'),
-            ],
+          constraints: const BoxConstraints(maxWidth: 1100),
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
+            children: labels.map((label) => _navButton(label)).toList(),
           ),
         ),
       ),
@@ -478,39 +570,48 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _navButton(String text) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 8),
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        decoration: BoxDecoration(
-          color: Color(0xFFFF7733),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Text(
-          text,
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+    final bool isSelected = _selectedCategoryLabel == text;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => _onCategorySelected(text),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFFFF7733) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFFF7733)),
+          ),
+          child: Text(
+            text,
+            style: TextStyle(
+              color: isSelected ? Colors.white : const Color(0xFFFF7733),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ),
       ),
     );
   }
 
   Widget _buildSaleBanner() {
-    if (_products.isEmpty) return SizedBox.shrink();
+    if (_products.isEmpty) return const SizedBox.shrink();
 
     final featuredProduct = _products[0];
 
     return Container(
-      margin: EdgeInsets.all(24),
-      padding: EdgeInsets.all(32),
+      margin: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
-        color: Color(0xFFFF7733),
+        color: const Color(0xFFFF7733),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+            children: const [
               Text('🔥', style: TextStyle(fontSize: 40)),
               SizedBox(width: 20),
               Text(
@@ -526,9 +627,9 @@ class _HomeScreenState extends State<HomeScreen> {
               Text('🔥', style: TextStyle(fontSize: 40)),
             ],
           ),
-          SizedBox(height: 32),
+          const SizedBox(height: 32),
           Container(
-            padding: EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(8),
@@ -538,17 +639,25 @@ class _HomeScreenState extends State<HomeScreen> {
                 Container(
                   height: 200,
                   width: 300,
-                  color: Colors.grey[200],
-                  child: Icon(
-                    Icons.computer,
-                    size: 100,
-                    color: Colors.grey[400],
+                  decoration: BoxDecoration(
+                    color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      Icons.computer,
+                      size: 100,
+                      color: Colors.grey[400],
+                    ),
                   ),
                 ),
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
                 Text(
                   featuredProduct['name'] ?? 'Featured Product',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 Text(
                   featuredProduct['description'] ?? '',
@@ -562,15 +671,23 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// "Popular This Week" section for the home state
+  /// On home, uses _filteredProducts (all products there).
   Widget _buildPopularSection() {
-    if (_products.isEmpty) return SizedBox.shrink();
+    final List<dynamic> productsToShow = _filteredProducts;
 
-    final List<dynamic> productsToShow = _products;
+    if (productsToShow.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Text(
+          'No products found.',
+          style: TextStyle(fontSize: 16, color: Colors.grey[700]),
+        ),
+      );
+    }
 
     return Column(
       children: [
-        Text(
+        const Text(
           'Popular This Week',
           style: TextStyle(
             fontSize: 48,
@@ -578,13 +695,13 @@ class _HomeScreenState extends State<HomeScreen> {
             color: Color(0xFFFF7733),
           ),
         ),
-        SizedBox(height: 32),
+        const SizedBox(height: 32),
         Padding(
-          padding: EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 24),
           child: GridView.builder(
             shrinkWrap: true,
-            physics: NeverScrollableScrollPhysics(),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
               childAspectRatio: 0.75,
               crossAxisSpacing: 16,
@@ -600,52 +717,69 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Search results grid – only relevant items, no "Popular" title
+  /// Results grid: used for both search results and category-only results.
   Widget _buildSearchResultsGrid() {
-    final List<dynamic> productsToShow = _filteredProducts;
+    final queryText = _searchController.text.trim();
+    final bool hasSearchText = queryText.isNotEmpty;
+    final bool hasCategory = _selectedCategoryLabel != null;
 
-    if (productsToShow.isEmpty) {
-      return Padding(
-        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 48),
-        child: Text(
-          'No products found for "${_appliedQuery}".',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w500,
-            color: Colors.grey[800],
-          ),
-        ),
-      );
+    String title = '';
+    if (hasSearchText && hasCategory) {
+      title = '${_selectedCategoryLabel!} results for "$queryText"';
+    } else if (hasSearchText) {
+      title = 'Search results for "$queryText"';
+    } else if (hasCategory) {
+      title = _selectedCategoryLabel!;
     }
 
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 24),
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: NeverScrollableScrollPhysics(),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          childAspectRatio: 0.75,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-        ),
-        itemCount: productsToShow.length,
-        itemBuilder: (context, index) {
-          return _buildProductCard(productsToShow[index]);
-        },
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (title.isNotEmpty)
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFFFF7733),
+              ),
+            ),
+          if (title.isNotEmpty) const SizedBox(height: 12),
+          Text(
+            '${_filteredProducts.length} items found',
+            style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+          ),
+          const SizedBox(height: 24),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              childAspectRatio: 0.75,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+            ),
+            itemCount: _filteredProducts.length,
+            itemBuilder: (context, index) {
+              final product = _filteredProducts[index];
+              return _buildProductCard(product);
+            },
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildProductCard(Map<String, dynamic> product) {
-    final String name = product['name'] ?? 'Product';
-    final String description = (product['description'] ?? '').toString();
+    final imageUrl = getProductImageUrl(product);
 
     return Container(
       decoration: BoxDecoration(
-        color: Color(0xFFFFF9F0),
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: [
+        color: const Color(0xFFFFF9F0),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [
           BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
         ],
       ),
@@ -655,66 +789,70 @@ class _HomeScreenState extends State<HomeScreen> {
           Expanded(
             flex: 3,
             child: Container(
-              margin: EdgeInsets.all(16),
+              margin: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Center(
-                child: Icon(Icons.computer, size: 80, color: Colors.grey[400]),
+                child: imageUrl != null
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity,
+                        ),
+                      )
+                    : Icon(Icons.computer, size: 80, color: Colors.grey[400]),
               ),
             ),
           ),
           Padding(
-            padding: EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  name,
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  product['name'] ?? 'Product',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                if (description.isNotEmpty) ...[
-                  SizedBox(height: 4),
-                  Text(
-                    description,
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Row(
                   children: [
-                    Icon(Icons.star, color: Colors.orange, size: 16),
-                    SizedBox(width: 4),
+                    const Icon(Icons.star, color: Colors.orange, size: 16),
+                    const SizedBox(width: 4),
                     Text(
                       '4.5 (120)',
                       style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                     ),
                   ],
                 ),
-                SizedBox(height: 12),
+                const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
+                        const SnackBar(
                           content: Text('Added to cart!'),
                           backgroundColor: Color(0xFFFF7733),
                           duration: Duration(seconds: 1),
                         ),
                       );
                     },
-                    child: Text('Add to Cart'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFFFF7733),
+                      backgroundColor: const Color(0xFFFF7733),
                       foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(vertical: 12),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
+                    child: const Text('Add to Cart'),
                   ),
                 ),
               ],
@@ -727,12 +865,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildPagination() {
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: 32),
+      padding: const EdgeInsets.symmetric(vertical: 32),
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+            children: const [
               Text(
                 '< ',
                 style: TextStyle(fontSize: 24, color: Color(0xFFFF7733)),
@@ -747,10 +885,10 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
           TextButton(
             onPressed: () {},
-            child: Text(
+            child: const Text(
               'Load More',
               style: TextStyle(fontSize: 18, color: Color(0xFFFF7733)),
             ),
@@ -765,16 +903,18 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.error_outline, size: 64, color: Colors.red),
-          SizedBox(height: 16),
-          Text('Error loading products'),
-          SizedBox(height: 8),
+          const Icon(Icons.error_outline, size: 64, color: Colors.red),
+          const SizedBox(height: 16),
+          const Text('Error loading products'),
+          const SizedBox(height: 8),
           Text(_error ?? ''),
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
           ElevatedButton(
             onPressed: _loadProducts,
-            child: Text('Retry'),
-            style: ElevatedButton.styleFrom(backgroundColor: Color(0xFFFF7733)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF7733),
+            ),
+            child: const Text('Retry'),
           ),
         ],
       ),
@@ -799,17 +939,21 @@ class ProductDetailPage extends StatelessWidget {
     final name = product['name'] ?? 'Product';
     final description = product['description'] ?? '';
     final price = product['price'];
+    final imageUrl = getProductImageUrl(product);
 
     return Scaffold(
-      backgroundColor: Color(0xFFFFF5E6),
-      appBar: AppBar(backgroundColor: Color(0xFFFF7733), title: Text(name)),
+      backgroundColor: const Color(0xFFFFF5E6),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFFF7733),
+        title: Text(name),
+      ),
       body: Center(
         child: Container(
-          constraints: BoxConstraints(maxWidth: 900),
-          padding: EdgeInsets.all(24),
+          constraints: const BoxConstraints(maxWidth: 900),
+          padding: const EdgeInsets.all(24),
           child: Row(
             children: [
-              // Left: big image placeholder
+              // Left: big image
               Expanded(
                 flex: 1,
                 child: Container(
@@ -817,7 +961,7 @@ class ProductDetailPage extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
+                    boxShadow: const [
                       BoxShadow(
                         color: Colors.black12,
                         blurRadius: 10,
@@ -826,15 +970,25 @@ class ProductDetailPage extends StatelessWidget {
                     ],
                   ),
                   child: Center(
-                    child: Icon(
-                      Icons.computer,
-                      size: 120,
-                      color: Colors.grey[400],
-                    ),
+                    child: imageUrl != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: Image.network(
+                              imageUrl,
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              height: double.infinity,
+                            ),
+                          )
+                        : Icon(
+                            Icons.computer,
+                            size: 120,
+                            color: Colors.grey[400],
+                          ),
                   ),
                 ),
               ),
-              SizedBox(width: 32),
+              const SizedBox(width: 32),
               // Right: text / info
               Expanded(
                 flex: 1,
@@ -844,34 +998,34 @@ class ProductDetailPage extends StatelessWidget {
                   children: [
                     Text(
                       name,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF333333),
                       ),
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     Text(
                       description,
                       style: TextStyle(fontSize: 16, color: Colors.grey[800]),
                     ),
-                    SizedBox(height: 24),
+                    const SizedBox(height: 24),
                     if (price != null)
                       Text(
                         '$price ₺',
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFFFF7733),
                         ),
                       ),
-                    SizedBox(height: 24),
+                    const SizedBox(height: 24),
                     SizedBox(
                       width: 180,
                       child: ElevatedButton(
                         onPressed: () {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
+                            const SnackBar(
                               content: Text('Added to cart'),
                               backgroundColor: Color(0xFFFF7733),
                               duration: Duration(seconds: 1),
@@ -879,11 +1033,11 @@ class ProductDetailPage extends StatelessWidget {
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Color(0xFFFF7733),
+                          backgroundColor: const Color(0xFFFF7733),
                           foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
-                        child: Text('Add to Cart'),
+                        child: const Text('Add to Cart'),
                       ),
                     ),
                   ],
