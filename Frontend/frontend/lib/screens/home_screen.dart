@@ -62,10 +62,7 @@ class StoreLayout extends StatefulWidget {
   final Widget body;
   final Function(String)? onSearchSubmitted;
   final Function(String)? onCategorySelected;
-
-  // New callback for sorting [Requirement 3.5.2]
   final Function(String)? onSortSelected;
-
   final String? selectedCategory;
 
   const StoreLayout({
@@ -135,12 +132,9 @@ class _StoreLayoutState extends State<StoreLayout> {
     });
   }
 
-  // Helper to navigate to Product Detail from suggestions
   void _onSuggestionTap(Map<String, dynamic> product) {
-    // Clear search before navigating
     _searchController.clear();
     setState(() => _showSuggestions = false);
-
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => ProductDetail(product: product)),
@@ -210,6 +204,7 @@ class _StoreLayoutState extends State<StoreLayout> {
                       right: 0,
                       top: 0,
                       child: Container(
+                        key: ValueKey(CartService().itemCount),
                         padding: const EdgeInsets.all(4),
                         decoration: const BoxDecoration(
                           color: Colors.red,
@@ -293,7 +288,6 @@ class _StoreLayoutState extends State<StoreLayout> {
                 child: GestureDetector(
                   onTap: () {
                     if (widget.onCategorySelected != null) {
-                      // Clear search if implemented in callback
                       _searchController.clear();
                       widget.onCategorySelected!(label);
                     } else {
@@ -342,7 +336,7 @@ class _StoreLayoutState extends State<StoreLayout> {
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 980),
+          constraints: const BoxConstraints(maxWidth: 1080),
           child: Column(
             children: [
               Row(
@@ -397,8 +391,6 @@ class _StoreLayoutState extends State<StoreLayout> {
                     ),
                   ),
                   const SizedBox(width: 12),
-
-                  // [Requirement 3.5.2] Sort Dropdown Button
                   Container(
                     decoration: BoxDecoration(
                       color: const Color(0xFFFF7733),
@@ -453,10 +445,8 @@ class _StoreLayoutState extends State<StoreLayout> {
                   ),
                 ],
               ),
-
               if (_showSuggestions && _suggestions.isNotEmpty)
                 const SizedBox(height: 8),
-
               if (_showSuggestions && _suggestions.isNotEmpty)
                 Container(
                   constraints: const BoxConstraints(maxHeight: 280),
@@ -480,8 +470,7 @@ class _StoreLayoutState extends State<StoreLayout> {
                       return MouseRegion(
                         cursor: SystemMouseCursors.click,
                         child: InkWell(
-                          onTap: () =>
-                              _onSuggestionTap(product), // Use helper method
+                          onTap: () => _onSuggestionTap(product),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 16,
@@ -586,18 +575,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _appliedQuery = '';
   String? _selectedCategoryLabel;
-  String? _currentSortOption; // [Requirement 3.5.2] Sort State
+  String? _currentSortOption;
 
-  // Pagination
   int _currentPage = 1;
-  int _itemsPerPage = 18; // Default as per previous request
-  final List<int> _itemsPerPageOptions = [
-    9,
-    18,
-    24,
-    48,
-    72,
-  ]; // [Requirement 3.4.1] Options
+  int _itemsPerPage = 18;
+  final List<int> _itemsPerPageOptions = [9, 18, 24, 48, 72];
 
   final Map<String, int> _categoryFilterIds = {
     'Electronics': 1,
@@ -645,7 +627,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // [Requirement 3.5.2] Sorting Logic
   void _sortProducts(List<dynamic> list) {
     if (_currentSortOption == null) return;
 
@@ -660,10 +641,8 @@ class _HomeScreenState extends State<HomeScreen> {
         case 'price_desc':
           return (b['price'] ?? 0).compareTo(a['price'] ?? 0);
         case 'pop_asc':
-          // Popularity ascending (using ID as proxy for stability)
           return (a['product_id'] ?? 0).compareTo(b['product_id'] ?? 0);
         case 'pop_desc':
-          // Popularity descending
           return (b['product_id'] ?? 0).compareTo(a['product_id'] ?? 0);
         default:
           return 0;
@@ -674,7 +653,6 @@ class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> _filterProducts() {
     List<dynamic> results = List.from(_products);
 
-    // 1. Category Filter
     final label = _selectedCategoryLabel;
     if (label != null) {
       final catId = _categoryFilterIds[label];
@@ -693,7 +671,6 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
 
-    // 2. Search Filter
     final query = _appliedQuery.trim().toLowerCase();
     if (query.isNotEmpty) {
       results = results.where((product) {
@@ -705,27 +682,23 @@ class _HomeScreenState extends State<HomeScreen> {
       }).toList();
     }
 
-    // 3. [Requirement 3.5.2] Apply Sorting
     _sortProducts(results);
-
     _currentPage = 1;
     return results;
   }
 
-  // [Requirement 3.5.2] Reset sort on Search
   void _handleSearch(String query) {
     setState(() {
       _appliedQuery = query;
-      _currentSortOption = null; // Reset sort
+      _currentSortOption = null;
       _filteredProducts = _filterProducts();
     });
   }
 
-  // [Requirement 3.5.2] Reset sort on Category
   void _handleCategory(String label) {
     setState(() {
       _appliedQuery = '';
-      _currentSortOption = null; // Reset sort
+      _currentSortOption = null;
       if (_selectedCategoryLabel == label) {
         _selectedCategoryLabel = null;
       } else {
@@ -735,7 +708,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // [Requirement 3.5.2] Handle Sort Selection
   void _handleSort(String option) {
     setState(() {
       _currentSortOption = option;
@@ -764,7 +736,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return StoreLayout(
       onSearchSubmitted: _handleSearch,
       onCategorySelected: _handleCategory,
-      onSortSelected: _handleSort, // Pass sort handler
+      onSortSelected: _handleSort,
       selectedCategory: _selectedCategoryLabel,
       body: _loading
           ? const Center(
@@ -777,128 +749,135 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   if (isHomeState) _buildSaleBanner(),
 
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 16,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (!isHomeState) ...[
-                          Text(
-                            _selectedCategoryLabel != null
-                                ? '$_selectedCategoryLabel Results'
-                                : 'Search Results for "$_appliedQuery"',
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFFFF7733),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                        ] else ...[
-                          const Text(
-                            'Popular This Week',
-                            style: TextStyle(
-                              fontSize: 48,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFFFF7733),
-                            ),
-                          ),
-                          const SizedBox(height: 32),
-                        ],
-
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  // Wrapper for Margins - 1080 MaxWidth [Requirement 3.5.4 Adjusted]
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1080),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 16,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('$totalItems items found'),
-                            Row(
-                              children: [
-                                const Text('Show: '),
+                            if (!isHomeState) ...[
+                              Text(
+                                _selectedCategoryLabel != null
+                                    ? '$_selectedCategoryLabel Results'
+                                    : 'Search Results for "$_appliedQuery"',
+                                style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFFF7733),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                            ] else ...[
+                              const Text(
+                                'Popular This Week',
+                                style: TextStyle(
+                                  fontSize: 48,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFFF7733),
+                                ),
+                              ),
+                              const SizedBox(height: 32),
+                            ],
 
-                                // [Requirement 3.5.1] Luxurious Dropdown
-                                Container(
-                                  margin: const EdgeInsets.only(left: 8),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: Colors.grey.shade300,
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('$totalItems items found'),
+                                Row(
+                                  children: [
+                                    const Text('Show: '),
+                                    Container(
+                                      margin: const EdgeInsets.only(left: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: Colors.grey.shade300,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(
+                                              0.05,
+                                            ),
+                                            blurRadius: 4,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: DropdownButtonHideUnderline(
+                                        child: DropdownButton<int>(
+                                          value: _itemsPerPage,
+                                          icon: const Icon(
+                                            Icons.keyboard_arrow_down,
+                                            size: 20,
+                                            color: Colors.grey,
+                                          ),
+                                          style: const TextStyle(
+                                            color: Colors.black87,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                          isDense: true,
+                                          items: _itemsPerPageOptions.map((
+                                            int value,
+                                          ) {
+                                            return DropdownMenuItem<int>(
+                                              value: value,
+                                              child: Text(value.toString()),
+                                            );
+                                          }).toList(),
+                                          onChanged: (newValue) {
+                                            setState(() {
+                                              _itemsPerPage = newValue!;
+                                              _currentPage = 1;
+                                            });
+                                          },
+                                        ),
+                                      ),
                                     ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.05),
-                                        blurRadius: 4,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  child: DropdownButtonHideUnderline(
-                                    child: DropdownButton<int>(
-                                      value: _itemsPerPage,
-                                      icon: const Icon(
-                                        Icons.keyboard_arrow_down,
-                                        size: 20,
-                                        color: Colors.grey,
-                                      ),
-                                      style: const TextStyle(
-                                        color: Colors.black87,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                      isDense: true,
-                                      items: _itemsPerPageOptions.map((
-                                        int value,
-                                      ) {
-                                        return DropdownMenuItem<int>(
-                                          value: value,
-                                          child: Text(value.toString()),
-                                        );
-                                      }).toList(),
-                                      onChanged: (newValue) {
-                                        setState(() {
-                                          _itemsPerPage = newValue!;
-                                          _currentPage = 1;
-                                        });
-                                      },
-                                    ),
-                                  ),
+                                  ],
                                 ),
                               ],
                             ),
+                            const SizedBox(height: 16),
+
+                            currentProducts.isEmpty
+                                ? const Center(
+                                    child: Padding(
+                                      padding: EdgeInsets.all(32),
+                                      child: Text("No products found."),
+                                    ),
+                                  )
+                                : GridView.builder(
+                                    shrinkWrap: true,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    gridDelegate:
+                                        const SliverGridDelegateWithFixedCrossAxisCount(
+                                          crossAxisCount: 3,
+                                          childAspectRatio: 0.75,
+                                          crossAxisSpacing: 16,
+                                          mainAxisSpacing: 16,
+                                        ),
+                                    itemCount: currentProducts.length,
+                                    itemBuilder: (context, index) {
+                                      return _buildProductCard(
+                                        currentProducts[index],
+                                      );
+                                    },
+                                  ),
                           ],
                         ),
-                        const SizedBox(height: 16),
-
-                        currentProducts.isEmpty
-                            ? const Center(
-                                child: Padding(
-                                  padding: EdgeInsets.all(32),
-                                  child: Text("No products found."),
-                                ),
-                              )
-                            : GridView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                gridDelegate:
-                                    const SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 3,
-                                      childAspectRatio: 0.75,
-                                      crossAxisSpacing: 16,
-                                      mainAxisSpacing: 16,
-                                    ),
-                                itemCount: currentProducts.length,
-                                itemBuilder: (context, index) {
-                                  return _buildProductCard(
-                                    currentProducts[index],
-                                  );
-                                },
-                              ),
-                      ],
+                      ),
                     ),
                   ),
 
@@ -917,8 +896,6 @@ class _HomeScreenState extends State<HomeScreen> {
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         onTap: () {
-          // Reset search state locally before navigating to detail
-          // so when user comes back, it's clean, OR just standard push
           _handleSearch("");
           Navigator.push(
             context,
@@ -1082,11 +1059,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSaleBanner() {
     if (_products.isEmpty) return const SizedBox.shrink();
     final featuredProduct = _products[0];
+
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         onTap: () {
-          // Clear search and sort before navigating
           _handleSearch("");
           Navigator.push(
             context,
@@ -1123,7 +1100,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
               const SizedBox(height: 32),
-              // Inner Product Card in Banner
+              // Inner Product Card for Banner [Restored]
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
@@ -1267,41 +1244,45 @@ class _ProductDetailState extends State<ProductDetail> {
                         ],
                       ),
                     ),
-                    Positioned(
-                      left: 16,
-                      top: 0,
-                      bottom: 0,
-                      child: Center(
-                        child: IconButton(
-                          icon: const Icon(
-                            Icons.arrow_back_ios,
-                            size: 40,
-                            color: Color(0xFFFF7733),
+                    // Left Arrow (Conditional) [Requirement 3.5.6]
+                    if (_currentImageIndex > 0)
+                      Positioned(
+                        left: 16,
+                        top: 0,
+                        bottom: 0,
+                        child: Center(
+                          child: IconButton(
+                            icon: const Icon(
+                              Icons.arrow_back_ios,
+                              size: 40,
+                              color: Color(0xFFFF7733),
+                            ),
+                            onPressed: () => setState(() {
+                              _currentImageIndex--;
+                            }),
                           ),
-                          onPressed: () => setState(() {
-                            if (_currentImageIndex > 0) _currentImageIndex--;
-                          }),
                         ),
                       ),
-                    ),
-                    Positioned(
-                      right: 16,
-                      top: 0,
-                      bottom: 0,
-                      child: Center(
-                        child: IconButton(
-                          icon: const Icon(
-                            Icons.arrow_forward_ios,
-                            size: 40,
-                            color: Color(0xFFFF7733),
-                          ),
-                          onPressed: () => setState(() {
-                            if (_currentImageIndex < _productImages.length - 1)
+                    // Right Arrow (Conditional) [Requirement 3.5.6]
+                    if (_currentImageIndex < _productImages.length - 1)
+                      Positioned(
+                        right: 16,
+                        top: 0,
+                        bottom: 0,
+                        child: Center(
+                          child: IconButton(
+                            icon: const Icon(
+                              Icons.arrow_forward_ios,
+                              size: 40,
+                              color: Color(0xFFFF7733),
+                            ),
+                            onPressed: () => setState(() {
                               _currentImageIndex++;
-                          }),
+                            }),
+                          ),
                         ),
                       ),
-                    ),
+                    // Dots
                     Positioned(
                       bottom: 16,
                       left: 0,
@@ -1398,6 +1379,7 @@ class _ProductDetailState extends State<ProductDetail> {
                 child: ElevatedButton(
                   onPressed: () {
                     CartService().addToCart(widget.product);
+                    setState(() {}); // Refresh UI for badge
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text('Added to cart'),
@@ -1431,7 +1413,7 @@ class _ProductDetailState extends State<ProductDetail> {
 
               const SizedBox(height: 24),
 
-              // 6. Pagination
+              // 6. Pagination (Visual Only on Detail Page per Friend's design)
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
