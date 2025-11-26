@@ -207,14 +207,14 @@ class _SignupScreenState extends State<SignupScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text("Already have an account? "),
-                        TextButton(
+                          TextButton(
                           onPressed: () {
                             Navigator.pop(context);
                           },
-                          child: Text(
+                          child: const Text(
                             'Login',
                             style: TextStyle(
-                              color: Color(0xFFFF7733),
+                              color: Colors.blue, // FIXED: Changed to blue
                               fontWeight: FontWeight.bold,
                             ),
                           ),

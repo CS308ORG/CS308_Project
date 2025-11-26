@@ -1,11 +1,8 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'signup_screen.dart';
-import 'customer_home.dart';
-import 'product_manager_home.dart';
-import 'sales_manager_home.dart';
-import 'admin_home.dart';
-import '../services/api_service.dart';
+import '../services/auth_service.dart'; // Import the new AuthService
 
 class LoginScreen extends StatefulWidget {
   @override
@@ -27,74 +24,22 @@ class _LoginScreenState extends State<LoginScreen> {
       _errorMessage = null;
     });
 
-    try {
-      // Sign in with Firebase Auth
-      final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
+    // Fix 4.0.2: Use AuthService (Backend API) instead of just Firebase
+    // This allows logging in with seeded data like "ali@example.com" / "hashed_pass_1"
+    bool success = await AuthService().login(
+      _emailController.text.trim(),
+      _passwordController.text,
+    );
 
-      // Get user role from backend
-      final apiService = ApiService();
-      final userRole = await apiService.getUserRole(credential.user!.uid);
-
-      print('User logged in: ${credential.user!.email} with role: $userRole');
-
-      // Navigate based on role
+    if (success) {
       if (!mounted) return;
-      
-      Widget homeScreen;
-      switch (userRole.toLowerCase()) {
-        case 'admin':
-          homeScreen = AdminHome(
-            username: credential.user!.email!,
-            role: userRole,
-          );
-          break;
-        case 'product_manager':
-        case 'productmanager':
-          homeScreen = ProductManagerHome(
-            username: credential.user!.email!,
-            role: userRole,
-          );
-          break;
-        case 'sales_manager':
-        case 'salesmanager':
-          homeScreen = SalesManagerHome(
-            username: credential.user!.email!,
-            role: userRole,
-          );
-          break;
-        default:
-          homeScreen = CustomerHome(
-            username: credential.user!.email!,
-            role: userRole,
-          );
-      }
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => homeScreen),
-      );
-    } on FirebaseAuthException catch (e) {
+      // Return to previous screen
+      Navigator.pop(context, true);
+    } else {
       setState(() {
         _isLoading = false;
-        if (e.code == 'user-not-found') {
-          _errorMessage = 'No user found with this email.';
-        } else if (e.code == 'wrong-password') {
-          _errorMessage = 'Wrong password.';
-        } else if (e.code == 'invalid-email') {
-          _errorMessage = 'Invalid email address.';
-        } else if (e.code == 'invalid-credential') {
-          _errorMessage = 'Invalid email or password.';
-        } else {
-          _errorMessage = e.message ?? 'Login failed';
-        }
-      });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = 'Error: $e';
+        _errorMessage =
+            'Email or password is incorrect, or you have not an account yet.';
       });
     }
   }
@@ -103,6 +48,14 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Color(0xFFFFF5E6),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.close, color: Color(0xFFFF7733)),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
       body: Center(
         child: SingleChildScrollView(
           child: Padding(
@@ -134,14 +87,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         color: Color(0xFFFF7733),
                       ),
                     ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Login to your account',
-                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                    ),
                     SizedBox(height: 32),
-                    
-                    // Email Field
+
                     TextFormField(
                       controller: _emailController,
                       decoration: InputDecoration(
@@ -149,20 +96,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.email),
                       ),
-                      keyboardType: TextInputType.emailAddress,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter your email';
-                        }
-                        if (!value.contains('@')) {
-                          return 'Please enter a valid email';
-                        }
-                        return null;
-                      },
+                      validator: (val) => val!.isEmpty ? 'Enter email' : null,
                     ),
                     SizedBox(height: 16),
-                    
-                    // Password Field
+
                     TextFormField(
                       controller: _passwordController,
                       decoration: InputDecoration(
@@ -171,16 +108,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         prefixIcon: Icon(Icons.lock),
                       ),
                       obscureText: true,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter your password';
-                        }
-                        return null;
-                      },
+                      validator: (val) =>
+                          val!.isEmpty ? 'Enter password' : null,
                     ),
                     SizedBox(height: 24),
-                    
-                    // Error Message
+
                     if (_errorMessage != null)
                       Container(
                         padding: EdgeInsets.all(12),
@@ -191,11 +123,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: Text(
                           _errorMessage!,
                           style: TextStyle(color: Colors.red),
+                          textAlign: TextAlign.center,
                         ),
                       ),
                     if (_errorMessage != null) SizedBox(height: 16),
-                    
-                    // Login Button
+
                     SizedBox(
                       width: double.infinity,
                       height: 48,
@@ -211,28 +143,31 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     SizedBox(height: 16),
-                    
-                    // Sign Up Link
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text("Don't have an account? "),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => SignupScreen()),
-                            );
-                          },
-                          child: Text(
-                            'Sign Up',
+
+                    // Fix 4.0.3: Updated label text
+                    RichText(
+                      text: TextSpan(
+                        text: 'Dont have an account yet? ',
+                        style: TextStyle(color: Colors.black),
+                        children: [
+                          TextSpan(
+                            text: 'Sign up',
                             style: TextStyle(
-                              color: Color(0xFFFF7733),
+                              color: Colors.blue,
                               fontWeight: FontWeight.bold,
                             ),
+                            recognizer: TapGestureRecognizer()
+                              ..onTap = () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => SignupScreen(),
+                                  ),
+                                );
+                              },
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -242,12 +177,5 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
   }
 }
