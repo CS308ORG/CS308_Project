@@ -22,7 +22,7 @@ class ReviewService {
     return _reviews[productId]!;
   }
 
-  // Feature 4.1.0: Add public review (Instant)
+  // Add public review (Instant)
   void addPublicReview(int productId, Map<String, dynamic> review) {
     if (!_reviews.containsKey(productId)) {
       _reviews[productId] = [];
@@ -31,6 +31,7 @@ class ReviewService {
     _reviews[productId]!.insert(0, review);
   }
 
+  // Add pending review
   void addPendingReview(String userId, int productId, int rating, String text) {
     if (!_pendingReviews.containsKey(userId)) {
       _pendingReviews[userId] = [];

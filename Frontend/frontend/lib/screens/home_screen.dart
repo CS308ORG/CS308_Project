@@ -3,12 +3,12 @@ import 'dart:math'; // For min()
 import 'package:firebase_auth/firebase_auth.dart'; // Authentication
 import '../services/api_service.dart';
 import '../services/cart_service.dart';
-import '../services/auth_service.dart'; // FIXED: Added this import
+import '../services/auth_service.dart'; // Uses AuthService for backend login state
 import 'login_screen.dart';
 import 'signup_screen.dart';
 import 'basket_page.dart';
 import 'order_history_page.dart'; // Order History
-import 'product_detail.dart'; // FIXED: Added this import
+import 'product_detail.dart'; // Product Detail Page
 
 // ==========================================
 // HELPER FUNCTIONS
@@ -171,7 +171,6 @@ class _StoreLayoutState extends State<StoreLayout> {
   }
 
   Widget _buildHeader() {
-    // FIXED: Now using AuthService properly
     final authService = AuthService();
     final isLoggedIn = authService.isLoggedIn;
     String displayName = authService.userName;
@@ -203,7 +202,7 @@ class _StoreLayoutState extends State<StoreLayout> {
           ),
           Row(
             children: [
-              // 1. Name (Orange) + Role (Blue Italic) - only if logged in
+              // 1. Name (Orange) - only if logged in
               if (isLoggedIn) ...[
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -731,9 +730,13 @@ class _HomeScreenState extends State<HomeScreen> {
         case 'price_desc':
           return (b['price'] ?? 0).compareTo(a['price'] ?? 0);
         case 'pop_asc':
-          return (a['product_id'] ?? 0).compareTo(b['product_id'] ?? 0);
+          return (a['popularity_score'] ?? 0).compareTo(
+            b['popularity_score'] ?? 0,
+          );
         case 'pop_desc':
-          return (b['product_id'] ?? 0).compareTo(a['product_id'] ?? 0);
+          return (b['popularity_score'] ?? 0).compareTo(
+            a['popularity_score'] ?? 0,
+          );
         default:
           return 0;
       }
@@ -986,9 +989,7 @@ class _HomeScreenState extends State<HomeScreen> {
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         onTap: () {
-          _handleSearch(
-            "",
-          ); // Assumes you have this method in State or pass it down
+          _handleSearch("");
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -1054,7 +1055,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 8),
 
-                    // FIX 4.1.0.0: Removed Rating Row (Stars)
+                    // REMOVED RATING ROW HERE
                     const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
@@ -1063,10 +1064,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           CartService().addToCart(product);
                           setState(() {});
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Added to cart!'),
-                              backgroundColor: Color(0xFFFF7733),
-                              duration: Duration(seconds: 1),
+                            SnackBar(
+                              content: Text(
+                                '${product['name']} added to cart!',
+                              ),
+                              backgroundColor: const Color(0xFFFF7733),
+                              duration: const Duration(seconds: 1),
                             ),
                           );
                         },
@@ -1179,7 +1182,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
               const SizedBox(height: 32),
-              // Inner Product Card for Banner [Restored]
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(

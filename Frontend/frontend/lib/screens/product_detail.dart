@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Kept for types if needed
 import '../services/cart_service.dart';
-import '../services/auth_service.dart'; // Required for AuthService logic
-import '../services/review_service.dart'; // Required for Review Persistence
-import 'home_screen.dart'; // For StoreLayout and helper functions
+import '../services/auth_service.dart';
+import '../services/api_service.dart'; // Used for data fetching
+import 'home_screen.dart';
 import 'login_screen.dart';
 
 class ProductDetail extends StatefulWidget {
@@ -19,13 +18,55 @@ class _ProductDetailState extends State<ProductDetail> {
   int _currentImageIndex = 0;
   final List<String> _productImages = ['Image 1', 'Image 2', 'Image 3'];
 
-  // Rating & Comment State
   int _selectedRating = 0;
   final TextEditingController _commentController = TextEditingController();
 
+  // State for reviews
+  List<dynamic> _publicReviews = [];
+  Map<String, dynamic>? _myPendingReview;
+  bool _isLoadingReviews = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReviews();
+  }
+
+  Future<void> _loadReviews() async {
+    final api = ApiService();
+    final productId = widget.product['product_id'] ?? widget.product['id'];
+
+    // 1. Fetch Public
+    final public = await api.getPublicReviews(productId);
+
+    // 2. Fetch Pending (if logged in)
+    List<dynamic> pendingList = [];
+    if (AuthService().isLoggedIn) {
+      pendingList = await api.getMyPendingReviews();
+    }
+
+    // Filter pending list to find one for THIS product
+    Map<String, dynamic>? pendingForThisProduct;
+    try {
+      // Backend returns string IDs, sample data uses ints. Handle loosely.
+      pendingForThisProduct = pendingList.firstWhere(
+        (r) => r['product_id'].toString() == productId.toString(),
+      );
+    } catch (e) {
+      pendingForThisProduct = null;
+    }
+
+    if (mounted) {
+      setState(() {
+        _publicReviews = public;
+        _myPendingReview = pendingForThisProduct;
+        _isLoadingReviews = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Helper functions from home_screen.dart
     final imageUrl = getProductImageUrl(widget.product);
     final title = widget.product['name'] ?? 'Product Name';
     final price = widget.product['price'];
@@ -34,18 +75,7 @@ class _ProductDetailState extends State<ProductDetail> {
     final distributor =
         widget.product['distributor_info'] ?? 'Unknown Supplier';
     final categoryNames = getCategoryNames(widget.product);
-
-    // Safely extract Product ID
-    final int productId =
-        widget.product['product_id'] ?? widget.product['id'] ?? 0;
-
-    // Get reviews from the persistent service
-    final publicReviews = ReviewService().getReviews(productId);
-    final currentUser = AuthService().userName;
-    final pendingReview = ReviewService().getPendingReview(
-      currentUser,
-      productId,
-    );
+    final productId = widget.product['product_id'] ?? widget.product['id'];
 
     return StoreLayout(
       body: SingleChildScrollView(
@@ -64,6 +94,7 @@ class _ProductDetailState extends State<ProductDetail> {
                 description,
                 distributor,
               ),
+
               const SizedBox(height: 40),
               const Divider(),
 
@@ -81,7 +112,6 @@ class _ProductDetailState extends State<ProductDetail> {
               _buildCommentBox(),
               const SizedBox(height: 16),
 
-              // Send Button needs productId to save review
               _buildSendButton(productId),
 
               const SizedBox(height: 40),
@@ -96,12 +126,19 @@ class _ProductDetailState extends State<ProductDetail> {
               ),
               const SizedBox(height: 16),
 
-              // 1. Pending Review Card (Visible only to this user)
-              if (pendingReview != null)
-                _buildPendingReviewCard(pendingReview, productId),
+              if (_isLoadingReviews)
+                const Center(
+                  child: CircularProgressIndicator(color: Color(0xFFFF7733)),
+                )
+              else ...[
+                if (_myPendingReview != null)
+                  _buildPendingReviewCard(_myPendingReview!),
 
-              // 2. Public Reviews List
-              _buildReviewsList(publicReviews),
+                if (_publicReviews.isEmpty && _myPendingReview == null)
+                  const Text("No reviews yet."),
+
+                _buildReviewsList(_publicReviews),
+              ],
             ],
           ),
         ),
@@ -109,6 +146,153 @@ class _ProductDetailState extends State<ProductDetail> {
     );
   }
 
+  // --- Widgets ---
+
+  Widget _buildSendButton(dynamic productId) {
+    bool isGrayedOut = _selectedRating == 0;
+    return Align(
+      alignment: Alignment.centerRight,
+      child: ElevatedButton(
+        onPressed: isGrayedOut
+            ? null
+            : () async {
+                if (!AuthService().isLoggedIn) {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => LoginScreen()),
+                  );
+                  // Refresh upon return
+                  _loadReviews();
+                  setState(() {});
+                } else {
+                  // Post to Backend
+                  bool success = await ApiService().postReview(
+                    productId,
+                    _selectedRating,
+                    _commentController.text,
+                  );
+
+                  if (success) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Review sent!")),
+                    );
+                    _commentController.clear();
+                    setState(() => _selectedRating = 0);
+                    _loadReviews(); // Reload from DB to see result
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Failed to send review.")),
+                    );
+                  }
+                }
+              },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isGrayedOut ? Colors.grey : const Color(0xFFFF7733),
+          foregroundColor: Colors.white,
+        ),
+        child: const Text("Send Review"),
+      ),
+    );
+  }
+
+  Widget _buildPendingReviewCard(Map<String, dynamic> review) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.yellow[50],
+        border: Border.all(color: Colors.orange),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Text(
+                    "You (Pending)",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(width: 8),
+                  ...List.generate(
+                    5,
+                    (i) => Icon(
+                      i < (review['rating'] ?? 0)
+                          ? Icons.star
+                          : Icons.star_border,
+                      size: 16,
+                      color: Colors.orange,
+                    ),
+                  ),
+                ],
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                onPressed: () async {
+                  // Call DELETE API
+                  await ApiService().deleteReview(
+                    review['review_id'].toString(),
+                  );
+                  _loadReviews();
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(review['comment'] ?? ''),
+          const SizedBox(height: 8),
+          const Text(
+            "Your comment is waiting for approval",
+            style: TextStyle(
+              color: Colors.red,
+              fontStyle: FontStyle.italic,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReviewsList(List<dynamic> reviews) {
+    return Column(children: reviews.map((r) => _buildReviewCard(r)).toList());
+  }
+
+  Widget _buildReviewCard(Map<String, dynamic> r) {
+    // Fallback if author_name missing (old data)
+    String name = r['author_name'] ?? r['user_id']?.toString() ?? 'Customer';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(width: 10),
+          ...List.generate(
+            5,
+            (i) => Icon(
+              i < (r['rating'] ?? 0) ? Icons.star : Icons.star_border,
+              size: 16,
+              color: Colors.orange,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Text(r['comment'] ?? '')),
+        ],
+      ),
+    );
+  }
+
+  // --- Standard Widgets (Carousel, Info, Inputs) ---
+  // (Copy these helper widgets exactly as they were in previous steps)
   Widget _buildImageCarousel(String? url, String title) {
     return Container(
       height: 400,
@@ -124,7 +308,6 @@ class _ProductDetailState extends State<ProductDetail> {
                 ? Image.network(url, fit: BoxFit.contain)
                 : const Icon(Icons.computer, size: 100, color: Colors.grey),
           ),
-          // Left Arrow
           if (_currentImageIndex > 0)
             Positioned(
               left: 16,
@@ -138,7 +321,6 @@ class _ProductDetailState extends State<ProductDetail> {
                 onPressed: () => setState(() => _currentImageIndex--),
               ),
             ),
-          // Right Arrow
           if (_currentImageIndex < _productImages.length - 1)
             Positioned(
               right: 16,
@@ -194,7 +376,7 @@ class _ProductDetailState extends State<ProductDetail> {
           ),
           onPressed: () {
             CartService().addToCart(widget.product);
-            setState(() {}); // Refresh badge in StoreLayout
+            setState(() {});
             ScaffoldMessenger.of(
               context,
             ).showSnackBar(const SnackBar(content: Text("Added to Cart")));
@@ -234,167 +416,6 @@ class _ProductDetailState extends State<ProductDetail> {
         border: OutlineInputBorder(),
         filled: true,
         fillColor: Colors.white,
-      ),
-    );
-  }
-
-  Widget _buildSendButton(int productId) {
-    bool isGrayedOut = _selectedRating == 0;
-    return Align(
-      alignment: Alignment.centerRight,
-      child: ElevatedButton(
-        onPressed: isGrayedOut
-            ? null
-            : () async {
-                // Check AuthService for backend login state
-                final isLoggedIn = AuthService().isLoggedIn;
-
-                if (!isLoggedIn) {
-                  // Forward to Login
-                  final result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => LoginScreen()),
-                  );
-                  // If we returned and are now logged in (e.g. user logged in inside LoginScreen)
-                  if (result == true) setState(() {});
-                } else {
-                  // Handle Review Submission
-                  final text = _commentController.text.trim();
-                  final userName = AuthService().userName;
-
-                  setState(() {
-                    if (text.isEmpty) {
-                      // Rating Only -> Instant Public
-                      ReviewService().addPublicReview(productId, {
-                        'user': userName,
-                        'rating': _selectedRating,
-                        'text': '',
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Rating published!")),
-                      );
-                      _selectedRating = 0;
-                      _commentController.clear();
-                    } else {
-                      // With Comment -> Pending Approval
-                      ReviewService().addPendingReview(
-                        userName,
-                        productId,
-                        _selectedRating,
-                        text,
-                      );
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Sent for approval.")),
-                      );
-                    }
-                  });
-                }
-              },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: isGrayedOut ? Colors.grey : const Color(0xFFFF7733),
-          foregroundColor: Colors.white,
-        ),
-        child: const Text("Send Review"),
-      ),
-    );
-  }
-
-  Widget _buildPendingReviewCard(Map<String, dynamic> review, int productId) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.yellow[50],
-        border: Border.all(color: Colors.orange),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    review['user'] ?? 'You',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(width: 8),
-                  ...List.generate(
-                    5,
-                    (i) => Icon(
-                      i < (review['rating'] ?? 0)
-                          ? Icons.star
-                          : Icons.star_border,
-                      size: 16,
-                      color: Colors.orange,
-                    ),
-                  ),
-                ],
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                onPressed: () {
-                  setState(() {
-                    ReviewService().removePendingReview(
-                      AuthService().userName,
-                      productId,
-                    );
-                    _commentController.clear();
-                    _selectedRating = 0;
-                  });
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(review['text'] ?? ''),
-          const SizedBox(height: 8),
-          const Text(
-            "Your comment is waiting for approval",
-            style: TextStyle(
-              color: Colors.red,
-              fontStyle: FontStyle.italic,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildReviewsList(List<Map<String, dynamic>> reviews) {
-    return Column(
-      children: reviews
-          .map((r) => _buildReviewCard(r['user'], r['rating'], r['text']))
-          .toList(),
-    );
-  }
-
-  Widget _buildReviewCard(String user, int rating, String txt) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Text(user, style: const TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(width: 10),
-          ...List.generate(
-            5,
-            (i) => Icon(
-              i < rating ? Icons.star : Icons.star_border,
-              size: 16,
-              color: Colors.orange,
-            ),
-          ),
-          const SizedBox(width: 10),
-          if (txt.isNotEmpty) Expanded(child: Text(txt)),
-        ],
       ),
     );
   }
