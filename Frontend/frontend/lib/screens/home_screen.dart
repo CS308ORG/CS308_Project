@@ -8,6 +8,7 @@ import 'login_screen.dart';
 import 'signup_screen.dart';
 import 'basket_page.dart';
 import 'order_history_page.dart'; // Order History
+import 'product_detail.dart'; // FIXED: Added this import
 
 // ==========================================
 // HELPER FUNCTIONS
@@ -170,7 +171,7 @@ class _StoreLayoutState extends State<StoreLayout> {
   }
 
   Widget _buildHeader() {
-    // FIXED: Now using AuthService properly (requires import)
+    // FIXED: Now using AuthService properly
     final authService = AuthService();
     final isLoggedIn = authService.isLoggedIn;
     String displayName = authService.userName;
@@ -644,7 +645,7 @@ class _StoreLayoutState extends State<StoreLayout> {
 }
 
 // ==========================================
-// HOME SCREEN
+// HOME SCREEN (Main Grid)
 // ==========================================
 class HomeScreen extends StatefulWidget {
   final String? initialCategory;
@@ -985,7 +986,9 @@ class _HomeScreenState extends State<HomeScreen> {
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         onTap: () {
-          _handleSearch("");
+          _handleSearch(
+            "",
+          ); // Assumes you have this method in State or pass it down
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -1050,19 +1053,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        const Icon(Icons.star, color: Colors.orange, size: 16),
-                        const SizedBox(width: 4),
-                        Text(
-                          '4.5 (120)',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
+
+                    // FIX 4.1.0.0: Removed Rating Row (Stars)
                     const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
@@ -1071,12 +1063,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           CartService().addToCart(product);
                           setState(() {});
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                '${product['name']} added to cart!',
-                              ),
-                              backgroundColor: const Color(0xFFFF7733),
-                              duration: const Duration(seconds: 1),
+                            const SnackBar(
+                              content: Text('Added to cart!'),
+                              backgroundColor: Color(0xFFFF7733),
+                              duration: Duration(seconds: 1),
                             ),
                           );
                         },
@@ -1252,411 +1242,6 @@ class _HomeScreenState extends State<HomeScreen> {
               backgroundColor: const Color(0xFFFF7733),
             ),
             child: const Text('Retry'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ==========================================
-// PRODUCT DETAIL PAGE
-// ==========================================
-class ProductDetail extends StatefulWidget {
-  final Map<String, dynamic> product;
-
-  const ProductDetail({Key? key, required this.product}) : super(key: key);
-
-  @override
-  _ProductDetailState createState() => _ProductDetailState();
-}
-
-class _ProductDetailState extends State<ProductDetail> {
-  int _currentImageIndex = 0;
-  final List<String> _productImages = ['Image 1', 'Image 2', 'Image 3'];
-
-  // Rating & Comment State
-  int _selectedRating = 0;
-  final TextEditingController _commentController = TextEditingController();
-  bool _hasSentReview = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final imageUrl = getProductImageUrl(widget.product);
-    final title = widget.product['name'] ?? 'Product Name';
-    final price = widget.product['price'];
-    final description = widget.product['description'] ?? '';
-    final stock = widget.product['quantity_in_stock'] ?? 0;
-    final distributor =
-        widget.product['distributor_info'] ?? 'Unknown Supplier';
-    final categoryNames = getCategoryNames(widget.product);
-
-    return StoreLayout(
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildImageCarousel(imageUrl, title),
-              const SizedBox(height: 24),
-              _buildProductInfo(
-                title,
-                price,
-                stock,
-                categoryNames,
-                description,
-                distributor,
-              ),
-              const SizedBox(height: 40),
-              const Divider(),
-
-              // Rating & Comments Section
-              const Text(
-                "Rate & Review",
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFFFF7733),
-                ),
-              ),
-              const SizedBox(height: 16),
-              _buildInteractiveRating(),
-              const SizedBox(height: 16),
-              _buildCommentBox(),
-              const SizedBox(height: 16),
-              _buildSendButton(),
-
-              const SizedBox(height: 40),
-              const Divider(),
-              const Text(
-                "Reviews",
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFFFF7733),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              if (_hasSentReview) _buildPendingReviewCard(),
-
-              _buildReviewsList(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildImageCarousel(String? url, String title) {
-    return Container(
-      height: 400,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFFF7733), width: 2),
-      ),
-      child: Stack(
-        children: [
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                url != null
-                    ? Image.network(url, height: 200, fit: BoxFit.contain)
-                    : Icon(Icons.computer, size: 150, color: Colors.grey[400]),
-                const SizedBox(height: 16),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (_currentImageIndex > 0)
-            Positioned(
-              left: 16,
-              top: 0,
-              bottom: 0,
-              child: IconButton(
-                icon: const Icon(
-                  Icons.arrow_back_ios,
-                  size: 40,
-                  color: Color(0xFFFF7733),
-                ),
-                onPressed: () => setState(() => _currentImageIndex--),
-              ),
-            ),
-          if (_currentImageIndex < _productImages.length - 1)
-            Positioned(
-              right: 16,
-              top: 0,
-              bottom: 0,
-              child: IconButton(
-                icon: const Icon(
-                  Icons.arrow_forward_ios,
-                  size: 40,
-                  color: Color(0xFFFF7733),
-                ),
-                onPressed: () => setState(() => _currentImageIndex++),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProductInfo(
-    String title,
-    dynamic price,
-    dynamic stock,
-    String cat,
-    String desc,
-    String distributor,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        children: [
-          _buildInfoRow(
-            'ID:',
-            widget.product['id']?.toString() ??
-                widget.product['product_id']?.toString() ??
-                'N/A',
-          ),
-          _buildInfoRow('Category:', cat),
-          _buildInfoRow('Price:', '${price ?? 0} ₺'),
-          _buildInfoRow('Stock:', '$stock units'),
-          _buildInfoRow('Distributor:', distributor),
-          _buildInfoRow('Serial No:', widget.product['serial_number'] ?? 'N/A'),
-          _buildInfoRow('Information:', desc),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFF7733),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-              onPressed: () {
-                CartService().addToCart(widget.product);
-                setState(() {}); // Refresh badge
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Added to cart'),
-                    backgroundColor: Color(0xFFFF7733),
-                    duration: Duration(seconds: 1),
-                  ),
-                );
-              },
-              child: const Text('Add to Cart', style: TextStyle(fontSize: 18)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: Color(0xFFFF7733),
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-          ),
-          Expanded(child: Text(value, style: const TextStyle(fontSize: 16))),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInteractiveRating() {
-    return Row(
-      children: List.generate(5, (index) {
-        return IconButton(
-          icon: Icon(
-            index < _selectedRating ? Icons.star : Icons.star_border,
-            color: index < _selectedRating ? Colors.yellow[700] : Colors.grey,
-            size: 32,
-          ),
-          onPressed: () {
-            setState(() {
-              _selectedRating = index + 1;
-            });
-          },
-        );
-      }),
-    );
-  }
-
-  Widget _buildCommentBox() {
-    return TextField(
-      controller: _commentController,
-      maxLines: 3,
-      decoration: const InputDecoration(
-        hintText: "Comments with texts are evaluated around 2 work days",
-        hintStyle: TextStyle(color: Colors.grey),
-        border: OutlineInputBorder(),
-        filled: true,
-        fillColor: Colors.white,
-      ),
-    );
-  }
-
-  Widget _buildSendButton() {
-    bool isGrayedOut = _selectedRating == 0;
-
-    return Align(
-      alignment: Alignment.centerRight,
-      child: ElevatedButton(
-        onPressed: isGrayedOut
-            ? null
-            : () async {
-                final user = FirebaseAuth.instance.currentUser;
-                if (user == null) {
-                  final result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => LoginScreen()),
-                  );
-                  if (result == true) {
-                    setState(() {});
-                  }
-                } else {
-                  setState(() {
-                    _hasSentReview = true;
-                  });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Review submitted!")),
-                  );
-                }
-              },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: isGrayedOut ? Colors.grey : const Color(0xFFFF7733),
-          foregroundColor: Colors.white,
-        ),
-        child: const Text("Send Review"),
-      ),
-    );
-  }
-
-  Widget _buildPendingReviewCard() {
-    bool hasText = _commentController.text.isNotEmpty;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.yellow[50],
-        border: Border.all(color: Colors.orange),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Text("You", style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(width: 8),
-              ...List.generate(
-                5,
-                (i) => Icon(
-                  i < _selectedRating ? Icons.star : Icons.star_border,
-                  size: 16,
-                  color: Colors.orange,
-                ),
-              ),
-            ],
-          ),
-          if (hasText) ...[
-            const SizedBox(height: 8),
-            Text(_commentController.text),
-            const SizedBox(height: 8),
-            const Text(
-              "Your comment is waiting for approval",
-              style: TextStyle(
-                color: Colors.red,
-                fontStyle: FontStyle.italic,
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildReviewsList() {
-    return Column(
-      children: [
-        _buildReviewCard('User1', 5, 'Great product!'),
-        const SizedBox(height: 16),
-        _buildReviewCard('User2', 4, 'Good value.'),
-      ],
-    );
-  }
-
-  Widget _buildReviewCard(String username, int rating, String comment) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFF7733),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  username,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Row(
-                  children: List.generate(
-                    5,
-                    (index) => Icon(
-                      index < rating ? Icons.star : Icons.star_border,
-                      color: Colors.white,
-                      size: 16,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            comment,
-            style: TextStyle(fontSize: 14, color: Colors.grey[700]),
           ),
         ],
       ),

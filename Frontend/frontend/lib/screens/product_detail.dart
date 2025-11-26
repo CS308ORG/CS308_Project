@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Kept for types if needed, but logic uses AuthService
+import 'package:firebase_auth/firebase_auth.dart'; // Kept for types if needed
 import '../services/cart_service.dart';
-import '../services/auth_service.dart'; // Required for AuthService
-import 'home_screen.dart'; // StoreLayout
+import '../services/auth_service.dart'; // Required for AuthService logic
+import '../services/review_service.dart'; // Required for Review Persistence
+import 'home_screen.dart'; // For StoreLayout and helper functions
 import 'login_screen.dart';
 
 class ProductDetail extends StatefulWidget {
@@ -21,22 +22,30 @@ class _ProductDetailState extends State<ProductDetail> {
   // Rating & Comment State
   int _selectedRating = 0;
   final TextEditingController _commentController = TextEditingController();
-  bool _hasSentReview = false;
 
   @override
   Widget build(BuildContext context) {
-    final imageUrl = getProductImageUrl(
-      widget.product,
-    ); // Helper from home_screen
+    // Helper functions from home_screen.dart
+    final imageUrl = getProductImageUrl(widget.product);
     final title = widget.product['name'] ?? 'Product Name';
     final price = widget.product['price'];
     final description = widget.product['description'] ?? '';
     final stock = widget.product['quantity_in_stock'] ?? 0;
     final distributor =
         widget.product['distributor_info'] ?? 'Unknown Supplier';
-    final categoryNames = getCategoryNames(
-      widget.product,
-    ); // Helper from home_screen
+    final categoryNames = getCategoryNames(widget.product);
+
+    // Safely extract Product ID
+    final int productId =
+        widget.product['product_id'] ?? widget.product['id'] ?? 0;
+
+    // Get reviews from the persistent service
+    final publicReviews = ReviewService().getReviews(productId);
+    final currentUser = AuthService().userName;
+    final pendingReview = ReviewService().getPendingReview(
+      currentUser,
+      productId,
+    );
 
     return StoreLayout(
       body: SingleChildScrollView(
@@ -57,6 +66,7 @@ class _ProductDetailState extends State<ProductDetail> {
               ),
               const SizedBox(height: 40),
               const Divider(),
+
               const Text(
                 "Rate & Review",
                 style: TextStyle(
@@ -70,7 +80,10 @@ class _ProductDetailState extends State<ProductDetail> {
               const SizedBox(height: 16),
               _buildCommentBox(),
               const SizedBox(height: 16),
-              _buildSendButton(),
+
+              // Send Button needs productId to save review
+              _buildSendButton(productId),
+
               const SizedBox(height: 40),
               const Divider(),
               const Text(
@@ -82,8 +95,13 @@ class _ProductDetailState extends State<ProductDetail> {
                 ),
               ),
               const SizedBox(height: 16),
-              if (_hasSentReview) _buildPendingReviewCard(),
-              _buildReviewsList(),
+
+              // 1. Pending Review Card (Visible only to this user)
+              if (pendingReview != null)
+                _buildPendingReviewCard(pendingReview, productId),
+
+              // 2. Public Reviews List
+              _buildReviewsList(publicReviews),
             ],
           ),
         ),
@@ -104,8 +122,9 @@ class _ProductDetailState extends State<ProductDetail> {
           Center(
             child: url != null
                 ? Image.network(url, fit: BoxFit.contain)
-                : Icon(Icons.computer, size: 100, color: Colors.grey),
+                : const Icon(Icons.computer, size: 100, color: Colors.grey),
           ),
+          // Left Arrow
           if (_currentImageIndex > 0)
             Positioned(
               left: 16,
@@ -119,6 +138,7 @@ class _ProductDetailState extends State<ProductDetail> {
                 onPressed: () => setState(() => _currentImageIndex--),
               ),
             ),
+          // Right Arrow
           if (_currentImageIndex < _productImages.length - 1)
             Positioned(
               right: 16,
@@ -174,7 +194,7 @@ class _ProductDetailState extends State<ProductDetail> {
           ),
           onPressed: () {
             CartService().addToCart(widget.product);
-            setState(() {});
+            setState(() {}); // Refresh badge in StoreLayout
             ScaffoldMessenger.of(
               context,
             ).showSnackBar(const SnackBar(content: Text("Added to Cart")));
@@ -218,7 +238,7 @@ class _ProductDetailState extends State<ProductDetail> {
     );
   }
 
-  Widget _buildSendButton() {
+  Widget _buildSendButton(int productId) {
     bool isGrayedOut = _selectedRating == 0;
     return Align(
       alignment: Alignment.centerRight,
@@ -226,24 +246,48 @@ class _ProductDetailState extends State<ProductDetail> {
         onPressed: isGrayedOut
             ? null
             : () async {
-                // FIXED: Use AuthService to check backend login status
+                // Check AuthService for backend login state
                 final isLoggedIn = AuthService().isLoggedIn;
 
                 if (!isLoggedIn) {
+                  // Forward to Login
                   final result = await Navigator.push(
                     context,
                     MaterialPageRoute(builder: (context) => LoginScreen()),
                   );
+                  // If we returned and are now logged in (e.g. user logged in inside LoginScreen)
                   if (result == true) setState(() {});
                 } else {
+                  // Handle Review Submission
+                  final text = _commentController.text.trim();
+                  final userName = AuthService().userName;
+
                   setState(() {
-                    _hasSentReview = true;
+                    if (text.isEmpty) {
+                      // Rating Only -> Instant Public
+                      ReviewService().addPublicReview(productId, {
+                        'user': userName,
+                        'rating': _selectedRating,
+                        'text': '',
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Rating published!")),
+                      );
+                      _selectedRating = 0;
+                      _commentController.clear();
+                    } else {
+                      // With Comment -> Pending Approval
+                      ReviewService().addPendingReview(
+                        userName,
+                        productId,
+                        _selectedRating,
+                        text,
+                      );
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Sent for approval.")),
+                      );
+                    }
                   });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Review submitted for approval!"),
-                    ),
-                  );
                 }
               },
         style: ElevatedButton.styleFrom(
@@ -255,9 +299,7 @@ class _ProductDetailState extends State<ProductDetail> {
     );
   }
 
-  Widget _buildPendingReviewCard() {
-    bool hasText = _commentController.text.isNotEmpty;
-    String userName = AuthService().userName;
+  Widget _buildPendingReviewCard(Map<String, dynamic> review, int productId) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
@@ -275,14 +317,16 @@ class _ProductDetailState extends State<ProductDetail> {
               Row(
                 children: [
                   Text(
-                    userName,
+                    review['user'] ?? 'You',
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(width: 8),
                   ...List.generate(
                     5,
                     (i) => Icon(
-                      i < _selectedRating ? Icons.star : Icons.star_border,
+                      i < (review['rating'] ?? 0)
+                          ? Icons.star
+                          : Icons.star_border,
                       size: 16,
                       color: Colors.orange,
                     ),
@@ -293,7 +337,10 @@ class _ProductDetailState extends State<ProductDetail> {
                 icon: const Icon(Icons.delete, color: Colors.red, size: 20),
                 onPressed: () {
                   setState(() {
-                    _hasSentReview = false;
+                    ReviewService().removePendingReview(
+                      AuthService().userName,
+                      productId,
+                    );
                     _commentController.clear();
                     _selectedRating = 0;
                   });
@@ -301,34 +348,31 @@ class _ProductDetailState extends State<ProductDetail> {
               ),
             ],
           ),
-          if (hasText) ...[
-            const SizedBox(height: 8),
-            Text(_commentController.text),
-            const SizedBox(height: 8),
-            const Text(
-              "Your comment is waiting for approval",
-              style: TextStyle(
-                color: Colors.red,
-                fontStyle: FontStyle.italic,
-                fontSize: 12,
-              ),
+          const SizedBox(height: 8),
+          Text(review['text'] ?? ''),
+          const SizedBox(height: 8),
+          const Text(
+            "Your comment is waiting for approval",
+            style: TextStyle(
+              color: Colors.red,
+              fontStyle: FontStyle.italic,
+              fontSize: 12,
             ),
-          ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildReviewsList() {
+  Widget _buildReviewsList(List<Map<String, dynamic>> reviews) {
     return Column(
-      children: [
-        _buildReviewCard("User1", 5, "Great product!"),
-        _buildReviewCard("User2", 4, "Good value."),
-      ],
+      children: reviews
+          .map((r) => _buildReviewCard(r['user'], r['rating'], r['text']))
+          .toList(),
     );
   }
 
-  Widget _buildReviewCard(String user, int stars, String txt) {
+  Widget _buildReviewCard(String user, int rating, String txt) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
@@ -343,36 +387,13 @@ class _ProductDetailState extends State<ProductDetail> {
           ...List.generate(
             5,
             (i) => Icon(
-              i < stars ? Icons.star : Icons.star_border,
+              i < rating ? Icons.star : Icons.star_border,
               size: 16,
               color: Colors.orange,
             ),
           ),
           const SizedBox(width: 10),
-          Expanded(child: Text(txt)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: Color(0xFFFF7733),
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-          ),
-          Expanded(child: Text(value, style: const TextStyle(fontSize: 16))),
+          if (txt.isNotEmpty) Expanded(child: Text(txt)),
         ],
       ),
     );
