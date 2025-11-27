@@ -297,28 +297,30 @@ app.get('/users/:uid/orders', authenticate, async (req, res) => {
             const orderId = orderData.order_id;
 
             // 2. Get Items for this Order
-            // Note: In production, consider denormalizing this data or using a more optimized query structure.
             const itemsSnapshot = await db.collection('order_items').where('order_id', '==', orderId).get();
 
             const items = [];
             for (const itemDoc of itemsSnapshot.docs) {
                 const itemData = itemDoc.data();
 
-                // 3. Get Product Name for each Item
-                let productName = "Unknown Product";
+                // 3. Get Product Details (Name, Image, etc.) for each Item
+                let productDetails = { name: "Unknown Product" };
                 try {
                     // Seed product IDs are integers, ensure string for doc lookup if needed
                     const productDoc = await db.collection('products').doc(String(itemData.product_id)).get();
                     if (productDoc.exists) {
-                        productName = productDoc.data().name;
+                        productDetails = productDoc.data();
                     }
                 } catch (e) {
                     console.error("Product fetch error", e);
                 }
 
+                // Merge product details into item data
+                // We prioritize itemData (like unit_price at time of purchase) over current product data
                 items.push({
+                    ...productDetails,
                     ...itemData,
-                    name: productName
+                    name: productDetails.name // Ensure name comes from product if available
                 });
             }
 

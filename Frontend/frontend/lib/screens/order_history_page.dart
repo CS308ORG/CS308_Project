@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart'; // ADDED: Required for seeded user access
-import 'home_screen.dart';
+import 'home_screen.dart'; // Contains getProductImageUrl
 
 class OrderHistoryPage extends StatefulWidget {
   @override
@@ -42,52 +42,40 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
           fetchedOrders = [
             {
               "order_id": 1001,
-              "status": "delivered",
-              "date": "2023-10-25T14:30:00",
+              "status": "processing",
+              "date": "2023-11-01T10:00:00",
               "delivery_address": "Sabanci Univ, Istanbul",
-              "total_amount": 137.0,
+              "total_amount": 1899.70,
               "items": [
                 {
                   "product_id": 1,
-                  "name": "Wireless headphones",
+                  "name": "Wireless Headphones",
                   "quantity": 1,
-                  "unit_price": 88.0,
+                  "unit_price": 1499.90,
+                  "imageUrl": null,
                 },
                 {
-                  "product_id": 5,
-                  "name": "Bluetooth Speakers",
-                  "quantity": 1,
-                  "unit_price": 49.0,
+                  "product_id": 4,
+                  "name": "Cotton T-Shirt L",
+                  "quantity": 2,
+                  "unit_price": 199.90,
+                  "imageUrl": null,
                 },
               ],
             },
             {
-              "order_id": 1002,
+              "order_id": 1009,
               "status": "in_transit",
-              "date": "2023-10-27T09:15:00",
-              "delivery_address": "Kadikoy, Istanbul",
-              "total_amount": 2500.0,
+              "date": "2023-10-20T09:15:00",
+              "delivery_address": "Kocaeli, TR",
+              "total_amount": 28158.00,
               "items": [
                 {
                   "product_id": 3,
                   "name": "Laptop Pro 14",
                   "quantity": 1,
-                  "unit_price": 2500.0,
-                },
-              ],
-            },
-            {
-              "order_id": 1003,
-              "status": "processing",
-              "date": null,
-              "delivery_address": "Home Address",
-              "total_amount": 150.0,
-              "items": [
-                {
-                  "product_id": 10,
-                  "name": "Sci-Fi Novel",
-                  "quantity": 3,
-                  "unit_price": 50.0,
+                  "unit_price": 27999.00,
+                  "imageUrl": null,
                 },
               ],
             },
@@ -129,7 +117,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
         if (mounted) setState(() => _loading = false);
       }
     } else {
-      // 3. CRITICAL FIX: Stop loading if no user is found at all
+      // Stop loading if no user is found at all
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -167,7 +155,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
 
   @override
   Widget build(BuildContext context) {
-    // RESOLVE USER INFO FOR DISPLAY (Supports both Firebase and AuthService)
+    // RESOLVE USER INFO FOR DISPLAY
     String userId = 'Unknown ID';
     String userEmail = 'No Email';
 
@@ -363,32 +351,66 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             ),
             const SizedBox(height: 8),
 
-            // --- Inner Card ---
+            // --- Inner Card (Item List) ---
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFFFAFAFA), // Very light grey
+                color: const Color(0xFFFAFAFA),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.grey.shade200),
               ),
               child: Column(
                 children: [
-                  // List of Products and Prices
                   ...items.map((item) {
                     final qty = item['quantity'] ?? 1;
                     final pid = item['product_id'] ?? item['sku'] ?? '-';
                     final name = item['name'] ?? 'Unknown Product';
-                    final price =
+                    final unitPrice =
                         (item['unit_price'] as num?)?.toDouble() ?? 0.0;
+                    // Format requested: ([Product Price])x([quantity])
+                    // We assume product price means Unit Price here.
+                    final imageUrl = getProductImageUrl(item);
 
                     return Padding(
-                      padding: const EdgeInsets.only(bottom: 8.0),
+                      padding: const EdgeInsets.only(bottom: 12.0),
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
+                          // 1. Thumbnail
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: imageUrl != null
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(7),
+                                    child: Image.network(
+                                      imageUrl,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (ctx, err, stack) =>
+                                          const Icon(
+                                            Icons.broken_image,
+                                            size: 20,
+                                            color: Colors.grey,
+                                          ),
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.computer,
+                                    size: 24,
+                                    color: Colors.grey,
+                                  ),
+                          ),
+
+                          const SizedBox(width: 16),
+
+                          // 2. [Qty]x(ID: [ID]) [Title]
                           Expanded(
                             child: Text(
-                              "${qty}x ($pid) $name",
+                              "${qty}x(ID: $pid) $name",
                               style: const TextStyle(
                                 fontSize: 14,
                                 color: Colors.black87,
@@ -396,12 +418,16 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
+
                           const SizedBox(width: 16),
+
+                          // 3. ([Product Price])x([Qty])
                           Text(
-                            "${price.toStringAsFixed(2)} ₺",
+                            "(${unitPrice.toStringAsFixed(2)} ₺)x($qty)",
                             style: const TextStyle(
-                              fontFamily: 'Roboto', // Ensures symbol rendering
+                              fontFamily: 'Roboto',
                               color: Colors.black54,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ],
@@ -411,7 +437,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
 
                   const Divider(height: 24),
 
-                  // Order Total inside Inner Card
+                  // Order Total
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
