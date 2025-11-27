@@ -316,7 +316,6 @@ app.get('/users/:uid/orders', authenticate, async (req, res) => {
                 }
 
                 // Merge product details into item data
-                // We prioritize itemData (like unit_price at time of purchase) over current product data
                 items.push({
                     ...productDetails,
                     ...itemData,
@@ -336,6 +335,57 @@ app.get('/users/:uid/orders', authenticate, async (req, res) => {
         return res.json({ orders });
     } catch (err) {
         console.error(err);
+        return res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /users/:uid/products/:productId/eligibility
+// NEW: Checks if a user has ordered a specific product and if it is delivered
+app.get('/users/:uid/products/:productId/eligibility', authenticate, async (req, res) => {
+    const { uid, productId } = req.params;
+
+    // Security Check
+    if (req.user.uid !== uid && req.user.role !== 'admin') {
+        return res.status(403).json({ error: "Unauthorized" });
+    }
+
+    const uidQuery = /^\d+$/.test(uid) ? parseInt(uid) : uid;
+    const pidQuery = /^\d+$/.test(productId) ? parseInt(productId) : productId;
+
+    try {
+        // 1. Get all DELIVERED orders for this user
+        const ordersSnapshot = await db.collection('orders')
+            .where('user_id', '==', uidQuery)
+            .where('status', '==', 'delivered')
+            .get();
+
+        if (ordersSnapshot.empty) {
+            return res.json({ canReview: false });
+        }
+
+        let canReview = false;
+
+        // 2. Check each order's items
+        for (const orderDoc of ordersSnapshot.docs) {
+            const orderId = orderDoc.data().order_id;
+
+            // Check if this specific product is in this order's items
+            const itemSnapshot = await db.collection('order_items')
+                .where('order_id', '==', orderId)
+                .where('product_id', '==', pidQuery)
+                .limit(1)
+                .get();
+
+            if (!itemSnapshot.empty) {
+                canReview = true;
+                break;
+            }
+        }
+
+        return res.json({ canReview });
+
+    } catch (err) {
+        console.error("Eligibility check error:", err);
         return res.status(500).json({ error: err.message });
     }
 });

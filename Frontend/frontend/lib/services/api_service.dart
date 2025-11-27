@@ -66,7 +66,7 @@ class ApiService {
     return [];
   }
 
-  // --- NEW REVIEW METHODS ---
+  // --- REVIEW METHODS ---
 
   // 1. Get Public Reviews
   Future<List<dynamic>> getPublicReviews(dynamic productId) async {
@@ -144,48 +144,26 @@ class ApiService {
       return false;
     }
   }
-}
 
-/*
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-
-class ApiService {
-  static const String baseUrl = 'http://localhost:3000';
-
-  Future<List<dynamic>> getProducts() async {
+  // 5. Check Eligibility
+  // Checks if the user ordered this product and it was delivered
+  Future<bool> checkReviewEligibility(String uid, dynamic productId) async {
     try {
+      final token = await _getAuthToken();
+      if (token == null) return false; // Not logged in
+
       final response = await http.get(
-        Uri.parse('$baseUrl/collections/products'),
+        Uri.parse('$baseUrl/users/$uid/products/$productId/eligibility'),
+        headers: {'Authorization': 'Bearer $token'},
       );
-      
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        print('Got ${data['documents']?.length ?? 0} products');
-        return data['documents'] ?? [];
+        return data['canReview'] == true;
       }
-      throw Exception('Failed to load products: ${response.statusCode}');
     } catch (e) {
-      print('Error loading products: $e');
-      rethrow;
+      print("Error checking eligibility: $e");
     }
-  }
-
-  Future<List<dynamic>> getCategories() async {
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/collections/categories'),
-      );
-      
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['documents'] ?? [];
-      }
-      throw Exception('Failed to load categories');
-    } catch (e) {
-      print('Error loading categories: $e');
-      rethrow;
-    }
+    return false;
   }
 }
-*/

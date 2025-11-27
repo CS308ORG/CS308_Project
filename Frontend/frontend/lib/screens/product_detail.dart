@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Needed for direct ID access check if using Firebase
 import '../services/cart_service.dart';
 import '../services/auth_service.dart';
 import '../services/api_service.dart';
@@ -21,28 +22,63 @@ class _ProductDetailState extends State<ProductDetail> {
   int _selectedRating = 0;
   final TextEditingController _commentController = TextEditingController();
 
-  // State for reviews
+  // State for reviews & eligibility
   List<dynamic> _publicReviews = [];
   Map<String, dynamic>? _myPendingReview;
   bool _isLoadingReviews = true;
+  bool _canReview = false; // Stores eligibility result from backend
 
   @override
   void initState() {
     super.initState();
     _loadReviews();
+    _commentController.addListener(() {
+      // Force rebuild to update warning color if text changes
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadReviews() async {
     final api = ApiService();
     final productId = widget.product['product_id'] ?? widget.product['id'];
 
-    // 1. Fetch Public
+    // 1. Fetch Public Reviews
     final public = await api.getPublicReviews(productId);
 
     // 2. Fetch Pending (if logged in)
     List<dynamic> pendingList = [];
+    bool eligible = false;
+
     if (AuthService().isLoggedIn) {
       pendingList = await api.getMyPendingReviews();
+
+      // 3. Check Eligibility
+      String? uid;
+      // Get correct UID (Firebase or Seeded)
+      if (FirebaseAuth.instance.currentUser != null) {
+        uid = FirebaseAuth.instance.currentUser!.uid;
+      } else {
+        uid =
+            AuthService().currentUser?['id']?.toString() ??
+            AuthService().currentUser?['user_id']?.toString();
+      }
+
+      if (uid != null) {
+        eligible = await api.checkReviewEligibility(uid, productId);
+      }
+    } else {
+      // If not logged in, we set eligible to true purely for UI state (button takes to login),
+      // or false to hide things.
+      // Requirement: "logged out state comment algorithm will run as usual"
+      // Usually this means button is enabled but redirects.
+      // However, for the warning text logic, we only show warning if logged in AND not eligible.
+      eligible = false;
     }
 
     // Filter pending list to find one for THIS product
@@ -59,6 +95,7 @@ class _ProductDetailState extends State<ProductDetail> {
       setState(() {
         _publicReviews = public;
         _myPendingReview = pendingForThisProduct;
+        _canReview = eligible;
         _isLoadingReviews = false;
       });
     }
@@ -109,6 +146,26 @@ class _ProductDetailState extends State<ProductDetail> {
               _buildInteractiveRating(),
               const SizedBox(height: 16),
               _buildCommentBox(),
+
+              // WARNING NOTE LOGIC
+              if (AuthService().isLoggedIn && !_canReview) ...[
+                const SizedBox(height: 8),
+                Text(
+                  "NOTE: You can only send comments on the products you received.",
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    fontStyle: FontStyle.italic,
+                    // Red if user typed/rated, Orange otherwise
+                    color:
+                        (_commentController.text.isNotEmpty ||
+                            _selectedRating > 0)
+                        ? Colors.red
+                        : Colors.orange,
+                  ),
+                ),
+              ],
+
               const SizedBox(height: 16),
 
               _buildSendButton(productId),
@@ -148,11 +205,24 @@ class _ProductDetailState extends State<ProductDetail> {
   // --- Widgets ---
 
   Widget _buildSendButton(dynamic productId) {
-    bool isGrayedOut = _selectedRating == 0;
+    bool isLoggedIn = AuthService().isLoggedIn;
+
+    // If Logged OUT: Button enabled (to redirect).
+    // If Logged IN: Button disabled if Rating is 0 OR Not Eligible.
+    bool isDisabled = false;
+    if (isLoggedIn) {
+      if (_selectedRating == 0 || !_canReview) {
+        isDisabled = true;
+      }
+    } else {
+      // Logged out: Disable if rating is 0 (standard behavior)
+      if (_selectedRating == 0) isDisabled = true;
+    }
+
     return Align(
       alignment: Alignment.centerRight,
       child: ElevatedButton(
-        onPressed: isGrayedOut
+        onPressed: isDisabled
             ? null
             : () async {
                 if (!AuthService().isLoggedIn) {
@@ -164,6 +234,9 @@ class _ProductDetailState extends State<ProductDetail> {
                   _loadReviews();
                   setState(() {});
                 } else {
+                  // Double check eligibility before sending (though backend enforces it too)
+                  if (!_canReview) return;
+
                   // Post to Backend
                   bool success = await ApiService().postReview(
                     productId,
@@ -186,7 +259,7 @@ class _ProductDetailState extends State<ProductDetail> {
                 }
               },
         style: ElevatedButton.styleFrom(
-          backgroundColor: isGrayedOut ? Colors.grey : const Color(0xFFFF7733),
+          backgroundColor: isDisabled ? Colors.grey : const Color(0xFFFF7733),
           foregroundColor: Colors.white,
         ),
         child: const Text("Send Review"),
@@ -393,7 +466,12 @@ class _ProductDetailState extends State<ProductDetail> {
           ),
           onPressed: () {
             setState(() {
-              _selectedRating = index + 1;
+              // Toggle logic: If clicking the same star count, reset to 0
+              if (_selectedRating == index + 1) {
+                _selectedRating = 0;
+              } else {
+                _selectedRating = index + 1;
+              }
             });
           },
         );
