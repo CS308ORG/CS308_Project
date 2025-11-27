@@ -5,15 +5,14 @@ import 'auth_service.dart';
 
 class ApiService {
   static const String baseUrl = 'http://localhost:3000';
-
   Future<String?> _getAuthToken() async {
     // 1. Try Firebase Auth (for Registered Users)
     User? user = FirebaseAuth.instance.currentUser;
     if (user != null) return await user.getIdToken();
-
     // 2. Try AuthService (for Seeded Users)
     if (AuthService().isLoggedIn) {
-      // Send the user_id as the token. The backend will recognize it.
+      // Send the user_id as the token.
+      // The backend will recognize it.
       return AuthService().currentUser?['id']?.toString() ??
           AuthService().currentUser?['user_id']?.toString();
     }
@@ -23,8 +22,8 @@ class ApiService {
   // --- EXISTING METHODS ---
 
   Future<String> getUserRole(String uid) async {
-    // ... (Keep existing logic) ...
-    return 'customer'; // Simplified for brevity in this snippet
+    // Simplified for brevity
+    return 'customer';
   }
 
   Future<void> setUserRole(String uid, String role) async {
@@ -39,8 +38,31 @@ class ApiService {
     return [];
   }
 
+  // --- UPDATED: GET REAL ORDERS FROM BACKEND ---
   Future<List<dynamic>> getUserOrders(String uid) async {
-    /* ... */
+    try {
+      final token = await _getAuthToken();
+      if (token == null) {
+        print("No auth token available for orders");
+        return [];
+      }
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/users/$uid/orders'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['orders'] ?? [];
+      } else {
+        print(
+          "Failed to fetch orders: ${response.statusCode} - ${response.body}",
+        );
+      }
+    } catch (e) {
+      print("Error fetching user orders: $e");
+    }
     return [];
   }
 
@@ -71,7 +93,6 @@ class ApiService {
         Uri.parse('$baseUrl/my-pending-reviews'),
         headers: {'Authorization': 'Bearer $token'},
       );
-
       if (response.statusCode == 200) {
         return jsonDecode(response.body)['reviews'] ?? [];
       }
@@ -117,7 +138,6 @@ class ApiService {
         Uri.parse('$baseUrl/reviews/$reviewId'),
         headers: {'Authorization': 'Bearer $token'},
       );
-
       return response.statusCode == 200;
     } catch (e) {
       print("Error deleting review: $e");

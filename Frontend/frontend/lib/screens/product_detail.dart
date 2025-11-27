@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/cart_service.dart';
 import '../services/auth_service.dart';
-import '../services/api_service.dart'; // Used for data fetching
+import '../services/api_service.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
 
@@ -48,7 +48,6 @@ class _ProductDetailState extends State<ProductDetail> {
     // Filter pending list to find one for THIS product
     Map<String, dynamic>? pendingForThisProduct;
     try {
-      // Backend returns string IDs, sample data uses ints. Handle loosely.
       pendingForThisProduct = pendingList.firstWhere(
         (r) => r['product_id'].toString() == productId.toString(),
       );
@@ -178,7 +177,7 @@ class _ProductDetailState extends State<ProductDetail> {
                     );
                     _commentController.clear();
                     setState(() => _selectedRating = 0);
-                    _loadReviews(); // Reload from DB to see result
+                    _loadReviews();
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text("Failed to send review.")),
@@ -232,7 +231,6 @@ class _ProductDetailState extends State<ProductDetail> {
               IconButton(
                 icon: const Icon(Icons.delete, color: Colors.red, size: 20),
                 onPressed: () async {
-                  // Call DELETE API
                   await ApiService().deleteReview(
                     review['review_id'].toString(),
                   );
@@ -262,7 +260,6 @@ class _ProductDetailState extends State<ProductDetail> {
   }
 
   Widget _buildReviewCard(Map<String, dynamic> r) {
-    // Fallback if author_name missing (old data)
     String name = r['author_name'] ?? r['user_id']?.toString() ?? 'Customer';
 
     return Container(
@@ -291,8 +288,6 @@ class _ProductDetailState extends State<ProductDetail> {
     );
   }
 
-  // --- Standard Widgets (Carousel, Info, Inputs) ---
-  // (Copy these helper widgets exactly as they were in previous steps)
   Widget _buildImageCarousel(String? url, String title) {
     return Container(
       height: 400,

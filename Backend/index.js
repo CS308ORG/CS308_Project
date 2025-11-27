@@ -56,7 +56,7 @@ async function authenticate(req, res, next) {
             if (doc.exists) {
                 req.user.role = doc.data().role || decoded.role || null;
             }
-        } catch (e) {}
+        } catch (e) { }
         next();
     } catch (err) {
         return res.status(401).json({ error: 'Invalid auth token', details: err.message });
@@ -77,7 +77,6 @@ function authorize(allowedRoles = []) {
 app.get('/health', (req, res) => {
     return res.json({ status: 'ok' });
 });
-
 app.get('/collections', async (req, res) => {
     try {
         const firestore = admin.firestore();
@@ -89,7 +88,6 @@ app.get('/collections', async (req, res) => {
         return res.status(500).json({ error: 'Failed to list collections' });
     }
 });
-
 app.get('/collections/:name', async (req, res) => {
     const { name } = req.params;
     try {
@@ -102,14 +100,12 @@ app.get('/collections/:name', async (req, res) => {
         return res.status(500).json({ error: `Failed to read collection ${name}` });
     }
 });
-
 app.get('/', (req, res) => {
     return res.json({
         message: 'Backend is running',
-        endpoints: ['/health', '/collections', '/collections/:name', '/login', '/register', '/roles', '/users/:id/role']
+        endpoints: ['/health', '/collections', '/collections/:name', '/login', '/register', '/roles', '/users/:id/role', '/users/:uid/orders']
     });
 });
-
 // Login endpoint
 app.post('/login', async (req, res) => {
     try {
@@ -143,7 +139,6 @@ app.post('/login', async (req, res) => {
         }
 
         const { password: _, ...userWithoutPassword } = userData;
-
         return res.json({
             success: true,
             message: 'Login successful',
@@ -152,7 +147,6 @@ app.post('/login', async (req, res) => {
                 ...userWithoutPassword
             }
         });
-
     } catch (err) {
         console.error('Login error:', err);
         return res.status(500).json({
@@ -191,7 +185,6 @@ app.post('/register', async (req, res) => {
 
         const usersRef = db.collection('users');
         const emailCheck = await usersRef.where('email', '==', email).limit(1).get();
-
         if (!emailCheck.empty) {
             return res.status(409).json({
                 error: 'Email already registered',
@@ -220,7 +213,6 @@ app.post('/register', async (req, res) => {
         await usersRef.doc(String(newUserId)).set(newUser);
 
         const { password: _, ...userWithoutPassword } = newUser;
-
         return res.status(201).json({
             success: true,
             message: 'User registered successfully',
@@ -229,7 +221,6 @@ app.post('/register', async (req, res) => {
                 ...userWithoutPassword
             }
         });
-
     } catch (err) {
         console.error('Register error:', err);
         return res.status(500).json({
@@ -257,7 +248,6 @@ app.get('/roles', async (req, res) => {
         return res.status(500).json({ error: 'Failed to list roles', details: err.message });
     }
 });
-
 app.get('/users/:id/role', authenticate, authorize(['admin']), async (req, res) => {
     const uid = req.params.id;
     try {
@@ -268,7 +258,6 @@ app.get('/users/:id/role', authenticate, authorize(['admin']), async (req, res) 
         return res.status(500).json({ error: 'Failed to get user role', details: err.message });
     }
 });
-
 app.put('/users/:id/role', authenticate, authorize(['admin']), async (req, res) => {
     const uid = req.params.id;
     const { role } = req.body || {};
@@ -278,10 +267,76 @@ app.put('/users/:id/role', authenticate, authorize(['admin']), async (req, res) 
         await admin.auth().setCustomUserClaims(uid, { role });
         return res.json({ uid, role });
     } catch (err) {
-        return res.status(500).json({ error: 'Failed to set role', details: err.message });
+        return res.status(500).json({
+            error: 'Failed to set role', details: err.message
+        });
     }
 });
 
+// --- ORDER ENDPOINTS ---
+
+// GET /users/:uid/orders
+// Returns full order history with nested items and product names
+app.get('/users/:uid/orders', authenticate, async (req, res) => {
+    const uid = req.params.uid;
+    // Security check: ensure requesting user matches target UID (or is admin)
+    if (req.user.uid !== uid && req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Unauthorized access to order history' });
+    }
+
+    // Handle integer IDs (Seed Data) vs String IDs (Real Data)
+    const uidQuery = /^\d+$/.test(uid) ? parseInt(uid) : uid;
+
+    try {
+        // 1. Get Orders
+        const ordersSnapshot = await db.collection('orders').where('user_id', '==', uidQuery).get();
+        const orders = [];
+
+        for (const orderDoc of ordersSnapshot.docs) {
+            const orderData = orderDoc.data();
+            const orderId = orderData.order_id;
+
+            // 2. Get Items for this Order
+            // Note: In production, consider denormalizing this data or using a more optimized query structure.
+            const itemsSnapshot = await db.collection('order_items').where('order_id', '==', orderId).get();
+
+            const items = [];
+            for (const itemDoc of itemsSnapshot.docs) {
+                const itemData = itemDoc.data();
+
+                // 3. Get Product Name for each Item
+                let productName = "Unknown Product";
+                try {
+                    // Seed product IDs are integers, ensure string for doc lookup if needed
+                    const productDoc = await db.collection('products').doc(String(itemData.product_id)).get();
+                    if (productDoc.exists) {
+                        productName = productDoc.data().name;
+                    }
+                } catch (e) {
+                    console.error("Product fetch error", e);
+                }
+
+                items.push({
+                    ...itemData,
+                    name: productName
+                });
+            }
+
+            // 4. Construct Order Object
+            orders.push({
+                ...orderData,
+                items: items,
+                // Default date to now if missing (Seed data lacks dates)
+                date: orderData.date || new Date().toISOString()
+            });
+        }
+
+        return res.json({ orders });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: err.message });
+    }
+});
 
 // --- NEW ENDPOINTS FOR REVIEWS (Fixing Gaps 1, 2, 3) ---
 
@@ -322,12 +377,12 @@ app.get('/my-pending-reviews', authenticate, async (req, res) => {
 
         const reviews = [];
         snapshot.forEach(doc => reviews.push(doc.data()));
+
         return res.json({ reviews });
     } catch (err) {
         return res.status(500).json({ error: err.message });
     }
 });
-
 // 3. POST Review (Secure Status Logic + User Name)
 app.post('/reviews', authenticate, async (req, res) => {
     const { product_id, rating, comment } = req.body;
@@ -361,7 +416,6 @@ app.post('/reviews', authenticate, async (req, res) => {
             status: status,
             timestamp: new Date().toISOString()
         };
-
         await db.collection('reviews').doc(newReview.review_id).set(newReview);
         return res.json({ success: true, review: newReview });
 
@@ -390,8 +444,6 @@ app.delete('/reviews/:id', authenticate, async (req, res) => {
         return res.status(500).json({ error: err.message });
     }
 });
-
-
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server listening on http://localhost:${PORT}`);
