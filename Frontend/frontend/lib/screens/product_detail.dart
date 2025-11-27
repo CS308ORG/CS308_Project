@@ -112,6 +112,7 @@ class _ProductDetailState extends State<ProductDetail> {
         widget.product['distributor_info'] ?? 'Unknown Supplier';
     final categoryNames = getCategoryNames(widget.product);
     final productId = widget.product['product_id'] ?? widget.product['id'];
+    final bool isOutOfStock = stock == 0;
 
     return StoreLayout(
       body: SingleChildScrollView(
@@ -120,7 +121,7 @@ class _ProductDetailState extends State<ProductDetail> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildImageCarousel(imageUrl, title),
+              _buildImageCarousel(imageUrl, title, isOutOfStock),
               const SizedBox(height: 24),
               _buildProductInfo(
                 title,
@@ -129,6 +130,7 @@ class _ProductDetailState extends State<ProductDetail> {
                 categoryNames,
                 description,
                 distributor,
+                isOutOfStock,
               ),
 
               const SizedBox(height: 40),
@@ -361,7 +363,7 @@ class _ProductDetailState extends State<ProductDetail> {
     );
   }
 
-  Widget _buildImageCarousel(String? url, String title) {
+  Widget _buildImageCarousel(String? url, String title, bool isOutOfStock) {
     return Container(
       height: 400,
       decoration: BoxDecoration(
@@ -376,6 +378,29 @@ class _ProductDetailState extends State<ProductDetail> {
                 ? Image.network(url, fit: BoxFit.contain)
                 : const Icon(Icons.computer, size: 100, color: Colors.grey),
           ),
+          if (isOutOfStock)
+            Positioned(
+              top: 16,
+              right: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Text(
+                  'Out of Stock',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ),
           if (_currentImageIndex > 0)
             Positioned(
               left: 16,
@@ -414,6 +439,7 @@ class _ProductDetailState extends State<ProductDetail> {
     String cat,
     String desc,
     String distributor,
+    bool isOutOfStock,
   ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -432,24 +458,37 @@ class _ProductDetailState extends State<ProductDetail> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        Text("$stock units in stock"),
+        Text(
+          "$stock units in stock",
+          style: TextStyle(
+            color: isOutOfStock ? Colors.red : Colors.black,
+            fontWeight: isOutOfStock ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
         const SizedBox(height: 10),
         Text(desc),
         const SizedBox(height: 20),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFFF7733),
+            backgroundColor: isOutOfStock
+                ? Colors.grey
+                : const Color(0xFFFF7733),
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 16),
           ),
-          onPressed: () {
-            CartService().addToCart(widget.product);
-            setState(() {});
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(const SnackBar(content: Text("Added to Cart")));
-          },
-          child: const Text("Add to Cart", style: TextStyle(fontSize: 18)),
+          onPressed: isOutOfStock
+              ? null
+              : () {
+                  CartService().addToCart(widget.product);
+                  setState(() {});
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Added to Cart")),
+                  );
+                },
+          child: Text(
+            isOutOfStock ? "Out of Stock" : "Add to Cart",
+            style: const TextStyle(fontSize: 18),
+          ),
         ),
       ],
     );

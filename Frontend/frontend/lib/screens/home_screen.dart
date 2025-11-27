@@ -3,12 +3,14 @@ import 'dart:math'; // For min()
 import 'package:firebase_auth/firebase_auth.dart'; // Authentication
 import '../services/api_service.dart';
 import '../services/cart_service.dart';
-import '../services/auth_service.dart'; // Uses AuthService for backend login state
+import '../services/auth_service.dart';
+// Uses AuthService for backend login state
 import 'login_screen.dart';
 import 'signup_screen.dart';
 import 'basket_page.dart';
 import 'order_history_page.dart'; // Order History
-import 'product_detail.dart'; // Product Detail Page
+import 'product_detail.dart';
+// Product Detail Page
 
 // ==========================================
 // HELPER FUNCTIONS
@@ -44,7 +46,6 @@ String getCategoryNames(Map<String, dynamic> product) {
     9: 'Sports',
     10: 'Books',
   };
-
   List<String> names = [];
   if (product['category_ids'] is List) {
     for (var id in product['category_ids']) {
@@ -77,7 +78,6 @@ class StoreLayout extends StatefulWidget {
     this.onSortSelected,
     this.selectedCategory,
   }) : super(key: key);
-
   @override
   _StoreLayoutState createState() => _StoreLayoutState();
 }
@@ -174,7 +174,6 @@ class _StoreLayoutState extends State<StoreLayout> {
     final authService = AuthService();
     final isLoggedIn = authService.isLoggedIn;
     String displayName = authService.userName;
-
     return Container(
       color: const Color(0xFFFFF5E6),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -270,9 +269,8 @@ class _StoreLayoutState extends State<StoreLayout> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (context) => LoginScreen()),
-                    ).then(
-                      (_) => setState(() {}),
-                    ); // Refresh header after returning from login
+                    ).then((_) => setState(() {}));
+                    // Refresh header after returning from login
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFF7733),
@@ -651,14 +649,12 @@ class HomeScreen extends StatefulWidget {
   final String? initialSearch;
 
   HomeScreen({this.initialCategory, this.initialSearch});
-
   @override
   _HomeScreenState createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
   final ApiService _apiService = ApiService();
-
   List<dynamic> _products = [];
   List<dynamic> _filteredProducts = [];
 
@@ -669,7 +665,6 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentPage = 1;
   int _itemsPerPage = 18;
   final List<int> _itemsPerPageOptions = [9, 18, 24, 48, 72];
-
   final Map<String, int> _categoryFilterIds = {
     'Electronics': 1,
     'Wear': 2,
@@ -682,7 +677,6 @@ class _HomeScreenState extends State<HomeScreen> {
     'Sports': 9,
     'Books': 10,
   };
-
   bool _loading = true;
   String? _error;
 
@@ -700,7 +694,6 @@ class _HomeScreenState extends State<HomeScreen> {
       _loading = true;
       _error = null;
     });
-
     try {
       final products = await _apiService.getProducts();
       setState(() {
@@ -718,7 +711,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _sortProducts(List<dynamic> list) {
     if (_currentSortOption == null) return;
-
     list.sort((a, b) {
       switch (_currentSortOption) {
         case 'name_asc':
@@ -812,7 +804,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final bool isHomeState =
         _appliedQuery.isEmpty && _selectedCategoryLabel == null;
-
     int totalItems = _filteredProducts.length;
     int totalPages = (totalItems / _itemsPerPage).ceil();
     if (totalPages == 0) totalPages = 1;
@@ -984,9 +975,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildProductCard(Map<String, dynamic> product) {
     final imageUrl = getProductImageUrl(product);
+    final int stock = product['quantity_in_stock'] ?? 0;
+    final bool isOutOfStock = stock == 0;
 
     return MouseRegion(
-      cursor: SystemMouseCursors.click,
+      cursor: isOutOfStock
+          ? SystemMouseCursors.basic
+          : SystemMouseCursors.click,
       child: GestureDetector(
         onTap: () {
           _handleSearch("");
@@ -1021,21 +1016,47 @@ class _HomeScreenState extends State<HomeScreen> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Center(
-                    child: imageUrl != null
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.network(
-                              imageUrl,
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              height: double.infinity,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        imageUrl != null
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  imageUrl,
+                                  fit: BoxFit.cover,
+                                ),
+                              )
+                            : Icon(
+                                Icons.computer,
+                                size: 80,
+                                color: Colors.grey[400],
+                              ),
+                        if (isOutOfStock)
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withOpacity(0.8),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Text(
+                                'Out of Stock',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
                             ),
-                          )
-                        : Icon(
-                            Icons.computer,
-                            size: 80,
-                            color: Colors.grey[400],
                           ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1060,25 +1081,31 @@ class _HomeScreenState extends State<HomeScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: () {
-                          CartService().addToCart(product);
-                          setState(() {});
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                '${product['name']} added to cart!',
-                              ),
-                              backgroundColor: const Color(0xFFFF7733),
-                              duration: const Duration(seconds: 1),
-                            ),
-                          );
-                        },
+                        onPressed: isOutOfStock
+                            ? null
+                            : () {
+                                CartService().addToCart(product);
+                                setState(() {});
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      '${product['name']} added to cart!',
+                                    ),
+                                    backgroundColor: const Color(0xFFFF7733),
+                                    duration: const Duration(seconds: 1),
+                                  ),
+                                );
+                              },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFF7733),
+                          backgroundColor: isOutOfStock
+                              ? Colors.grey
+                              : const Color(0xFFFF7733),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
-                        child: const Text('Add to Cart'),
+                        child: Text(
+                          isOutOfStock ? 'Out of Stock' : 'Add to Cart',
+                        ),
                       ),
                     ),
                   ],
@@ -1141,7 +1168,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSaleBanner() {
     if (_products.isEmpty) return const SizedBox.shrink();
     final featuredProduct = _products[0];
-
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
