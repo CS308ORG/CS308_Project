@@ -496,6 +496,12 @@ app.delete('/reviews/:id', authenticate, async (req, res) => {
         return res.status(500).json({ error: err.message });
     }
 });
+
+// ============================================
+// AUTH ROUTES (Login-Sign Up by İrem Ulusal)
+// ============================================
+require('./auth-routes')(app, db);
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server listening on http://localhost:${PORT}`);
