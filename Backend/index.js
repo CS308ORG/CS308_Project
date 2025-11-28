@@ -93,7 +93,15 @@ app.get('/collections/:name', async (req, res) => {
     const { name } = req.params;
     try {
         const firestore = admin.firestore();
-        const snapshot = await firestore.collection(name).limit(20).get();
+        const collectionRef = firestore.collection(name);
+        let query = collectionRef.limit(20);
+
+        // Public endpoints should never surface unapproved reviews
+        if (name === 'reviews') {
+            query = collectionRef.where('approval_status', '==', 'approved').limit(20);
+        }
+
+        const snapshot = await query.get();
         const documents = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
         return res.json({ collection: name, count: documents.length, documents });
     } catch (err) {
@@ -112,6 +120,9 @@ app.get('/', (req, res) => {
             '/register',
             '/checkout',
             '/orders/delivery',
+            '/products/:id/reviews',
+            '/reviews/moderation',
+            '/reviews/:id/approve',
             '/roles',
             '/users/:id/role',
             '/users/:uid/orders'
@@ -582,7 +593,7 @@ app.get('/products/:id/reviews', async (req, res) => {
     try {
         const snapshot = await db.collection('reviews')
             .where('product_id', '==', pidQuery)
-            .where('status', '==', 'approved')
+            .where('approval_status', '==', 'approved')
             // .orderBy('timestamp', 'desc') // Uncomment if you create the composite index in Firebase Console
             .get();
 
@@ -604,7 +615,7 @@ app.get('/my-pending-reviews', authenticate, async (req, res) => {
     try {
         const snapshot = await db.collection('reviews')
             .where('user_id', '==', req.user.uid)
-            .where('status', '==', 'pending')
+            .where('approval_status', '==', 'pending')
             .get();
 
         const reviews = [];
@@ -623,10 +634,6 @@ app.post('/reviews', authenticate, async (req, res) => {
         return res.status(400).json({ error: "Missing product_id or rating" });
     }
 
-    // Force status: text = pending, no text = approved
-    const hasText = comment && comment.trim().length > 0;
-    const status = hasText ? 'pending' : 'approved';
-
     const userId = req.user.uid;
 
     // Handle product ID type consistency
@@ -638,14 +645,20 @@ app.post('/reviews', authenticate, async (req, res) => {
         const userDoc = await db.collection('users').doc(userId).get();
         const userName = userDoc.exists ? (userDoc.data().name || "Customer") : "Customer";
 
+        const cleanComment = comment ? comment.trim() : "";
+        const approvalStatus = 'pending';
+
         const newReview = {
             review_id: Date.now().toString(), // Simple ID generation
             user_id: userId,
             author_name: userName, // Saved for display
             product_id: finalProductId,
             rating: Number(rating),
-            comment: comment || "",
-            status: status,
+            comment: cleanComment,
+            status: approvalStatus,
+            approval_status: approvalStatus,
+            moderated_by: null,
+            approval_reason: null,
             timestamp: new Date().toISOString()
         };
         await db.collection('reviews').doc(newReview.review_id).set(newReview);
@@ -653,6 +666,56 @@ app.post('/reviews', authenticate, async (req, res) => {
 
     } catch (err) {
         return res.status(500).json({ error: err.message });
+    }
+});
+
+// 3b. GET Pending Reviews for Moderation (Product Manager only)
+app.get('/reviews/moderation', authenticate, authorize(['product_manager']), async (req, res) => {
+    try {
+        const snapshot = await db.collection('reviews')
+            .where('approval_status', '==', 'pending')
+            .get();
+
+        const reviews = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        return res.json({ reviews });
+    } catch (err) {
+        console.error('Failed to load pending reviews:', err);
+        return res.status(500).json({ error: 'Failed to load pending reviews', details: err.message });
+    }
+});
+
+// 3c. PUT Approve/Reject Review (Product Manager only)
+app.put('/reviews/:id/approve', authenticate, authorize(['product_manager']), async (req, res) => {
+    const reviewId = req.params.id;
+    const { decision, reason } = req.body || {};
+    const normalizedDecision = (decision || 'approved').toLowerCase();
+
+    if (!['approved', 'rejected'].includes(normalizedDecision)) {
+        return res.status(400).json({ error: 'Invalid decision', details: 'Use approved or rejected' });
+    }
+
+    try {
+        const reviewRef = db.collection('reviews').doc(reviewId);
+        const reviewDoc = await reviewRef.get();
+
+        if (!reviewDoc.exists) {
+            return res.status(404).json({ error: 'Review not found' });
+        }
+
+        const updatePayload = {
+            approval_status: normalizedDecision,
+            status: normalizedDecision,
+            moderated_by: req.user.uid,
+            approval_reason: reason || null,
+            moderated_at: FieldValue.serverTimestamp()
+        };
+
+        await reviewRef.update(updatePayload);
+        const updatedDoc = await reviewRef.get();
+        return res.json({ success: true, review: updatedDoc.data() });
+    } catch (err) {
+        console.error('Failed to update review approval:', err);
+        return res.status(500).json({ error: 'Failed to update review approval', details: err.message });
     }
 });
 
