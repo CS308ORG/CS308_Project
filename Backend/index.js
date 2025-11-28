@@ -21,6 +21,7 @@ if (serviceAccountPath) {
 }
 
 const db = admin.firestore();
+const FieldValue = admin.firestore.FieldValue;
 
 // --- AUTH MIDDLEWARE ---
 
@@ -103,7 +104,17 @@ app.get('/collections/:name', async (req, res) => {
 app.get('/', (req, res) => {
     return res.json({
         message: 'Backend is running',
-        endpoints: ['/health', '/collections', '/collections/:name', '/login', '/register', '/roles', '/users/:id/role', '/users/:uid/orders']
+        endpoints: [
+            '/health',
+            '/collections',
+            '/collections/:name',
+            '/login',
+            '/register',
+            '/checkout',
+            '/roles',
+            '/users/:id/role',
+            '/users/:uid/orders'
+        ]
     });
 });
 // Login endpoint
@@ -225,6 +236,134 @@ app.post('/register', async (req, res) => {
         console.error('Register error:', err);
         return res.status(500).json({
             error: 'Failed to register user',
+            details: err.message
+        });
+    }
+});
+
+// Checkout endpoint
+app.post('/checkout', async (req, res) => {
+    try {
+        const { user_id, items, status } = req.body || {};
+
+        if (!user_id) {
+            return res.status(400).json({
+                error: 'Missing user_id',
+                details: 'Please provide the user_id placing the order'
+            });
+        }
+
+        if (!Array.isArray(items) || !items.length) {
+            return res.status(400).json({
+                error: 'Missing items',
+                details: 'Provide at least one product with product_id and quantity'
+            });
+        }
+
+        const sanitizedItems = [];
+        const aggregated = {};
+        for (const entry of items) {
+            const { product_id, quantity } = entry || {};
+            const productIdNum = Number(product_id);
+            const quantityNum = Number(quantity);
+            if (!Number.isInteger(productIdNum) || productIdNum <= 0) {
+                return res.status(400).json({
+                    error: 'Invalid product_id',
+                    details: 'Each item must include a positive integer product_id'
+                });
+            }
+            if (!Number.isInteger(quantityNum) || quantityNum <= 0) {
+                return res.status(400).json({
+                    error: 'Invalid quantity',
+                    details: 'Each item must include a positive integer quantity'
+                });
+            }
+            sanitizedItems.push({ product_id: productIdNum, quantity: quantityNum });
+            const key = String(productIdNum);
+            aggregated[key] = (aggregated[key] || 0) + quantityNum;
+        }
+
+        const normalizedUserId = /^\d+$/.test(String(user_id)) ? Number(user_id) : user_id;
+
+        const orderResult = await db.runTransaction(async (tx) => {
+            const productEntries = Object.entries(aggregated);
+            const productRefs = productEntries.map(([productId]) =>
+                db.collection('products').doc(String(productId))
+            );
+            const productSnaps = await Promise.all(productRefs.map((ref) => tx.get(ref)));
+
+            const countersRef = db.collection('meta').doc('counters');
+            const countersSnap = await tx.get(countersRef);
+            let orderId;
+            if (countersSnap.exists && typeof countersSnap.data().nextOrderId === 'number') {
+                orderId = countersSnap.data().nextOrderId;
+                tx.update(countersRef, { nextOrderId: orderId + 1 });
+            } else {
+                orderId = 1;
+                tx.set(countersRef, { nextOrderId: 2 }, { merge: true });
+            }
+
+            let computedTotal = 0;
+            productSnaps.forEach((snap, index) => {
+                const [productId, requestedQty] = productEntries[index];
+                if (!snap.exists) {
+                    const error = new Error(`Product ${productId} not found`);
+                    error.code = 'PRODUCT_NOT_FOUND';
+                    error.meta = { productId };
+                    throw error;
+                }
+                const data = snap.data();
+                const currentStock = Number(data.quantity_in_stock || 0);
+                if (currentStock < requestedQty) {
+                    const error = new Error(`Product ${productId} does not have enough stock`);
+                    error.code = 'OUT_OF_STOCK';
+                    error.meta = { productId, available: currentStock };
+                    throw error;
+                }
+                const price = Number(data.price || 0);
+                computedTotal += price * requestedQty;
+                tx.update(productRefs[index], {
+                    quantity_in_stock: FieldValue.increment(-requestedQty)
+                });
+            });
+
+            const orderRef = db.collection('orders').doc(String(orderId));
+            const orderPayload = {
+                order_id: orderId,
+                user_id: normalizedUserId,
+                status: status || 'processing',
+                total_amount: Number(computedTotal.toFixed(2)),
+                items: sanitizedItems,
+                created_at: FieldValue.serverTimestamp()
+            };
+            tx.set(orderRef, orderPayload);
+
+            return { id: orderRef.id, ...orderPayload };
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: 'Order created and stock updated',
+            order: orderResult
+        });
+    } catch (err) {
+        console.error('Checkout error:', err);
+        if (err.code === 'OUT_OF_STOCK') {
+            return res.status(409).json({
+                error: 'Insufficient stock',
+                details: err.message,
+                product: err.meta
+            });
+        }
+        if (err.code === 'PRODUCT_NOT_FOUND') {
+            return res.status(404).json({
+                error: 'Product not found',
+                details: err.message,
+                product: err.meta
+            });
+        }
+        return res.status(500).json({
+            error: 'Failed to process checkout',
             details: err.message
         });
     }
