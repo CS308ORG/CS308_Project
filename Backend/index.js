@@ -436,65 +436,85 @@ app.put('/users/:id/role', authenticate, authorize(['admin']), async (req, res) 
 // --- ORDER ENDPOINTS ---
 
 // GET /users/:uid/orders
-// Returns full order history with nested items and product names
+// Returns sorted order history with product information
 app.get('/users/:uid/orders', authenticate, async (req, res) => {
     const uid = req.params.uid;
-    // Security check: ensure requesting user matches target UID (or is admin)
     if (req.user.uid !== uid && req.user.role !== 'admin') {
         return res.status(403).json({ error: 'Unauthorized access to order history' });
     }
 
-    // Handle integer IDs (Seed Data) vs String IDs (Real Data)
-    const uidQuery = /^\d+$/.test(uid) ? parseInt(uid) : uid;
+    const uidQuery = /^\d+$/.test(uid) ? parseInt(uid, 10) : uid;
 
     try {
-        // 1. Get Orders
-        const ordersSnapshot = await db.collection('orders').where('user_id', '==', uidQuery).get();
-        const orders = [];
+        let ordersSnapshot;
+        let snapshotOrdered = true;
+        try {
+            ordersSnapshot = await db.collection('orders')
+                .where('user_id', '==', uidQuery)
+                .orderBy('created_at', 'desc')
+                .get();
+        } catch (orderingError) {
+            console.warn('orders created_at index missing, falling back to unsorted query', orderingError.message);
+            snapshotOrdered = false;
+            ordersSnapshot = await db.collection('orders')
+                .where('user_id', '==', uidQuery)
+                .get();
+        }
 
+        const orders = [];
         for (const orderDoc of ordersSnapshot.docs) {
             const orderData = orderDoc.data();
             const orderId = orderData.order_id;
 
-            // 2. Get Items for this Order
-            const itemsSnapshot = await db.collection('order_items').where('order_id', '==', orderId).get();
+            let items = [];
+            if (Array.isArray(orderData.items) && orderData.items.length) {
+                items = orderData.items;
+            } else {
+                const itemsSnapshot = await db.collection('order_items')
+                    .where('order_id', '==', orderId)
+                    .get();
+                items = itemsSnapshot.docs.map(doc => doc.data());
+            }
 
-            const items = [];
-            for (const itemDoc of itemsSnapshot.docs) {
-                const itemData = itemDoc.data();
-
-                // 3. Get Product Details (Name, Image, etc.) for each Item
-                let productDetails = { name: "Unknown Product" };
-                try {
-                    // Seed product IDs are integers, ensure string for doc lookup if needed
-                    const productDoc = await db.collection('products').doc(String(itemData.product_id)).get();
-                    if (productDoc.exists) {
-                        productDetails = productDoc.data();
+            const enrichedItems = [];
+            for (const item of items) {
+                const productId = item.product_id ?? item.productId;
+                let productDetails = {};
+                if (productId !== undefined) {
+                    try {
+                        const productDoc = await db.collection('products').doc(String(productId)).get();
+                        if (productDoc.exists) {
+                            productDetails = productDoc.data();
+                        }
+                    } catch (e) {
+                        console.error('Product fetch error:', e);
                     }
-                } catch (e) {
-                    console.error("Product fetch error", e);
                 }
-
-                // Merge product details into item data
-                items.push({
+                enrichedItems.push({
                     ...productDetails,
-                    ...itemData,
-                    name: productDetails.name // Ensure name comes from product if available
+                    ...item,
+                    name: item.name || productDetails.name || 'Unknown Product'
                 });
             }
 
-            // 4. Construct Order Object
+            const createdAt = orderData.created_at && typeof orderData.created_at.toDate === 'function'
+                ? orderData.created_at.toDate().toISOString()
+                : (orderData.date || new Date().toISOString());
+
             orders.push({
                 ...orderData,
-                items: items,
-                // Default date to now if missing (Seed data lacks dates)
-                date: orderData.date || new Date().toISOString()
+                items: enrichedItems,
+                date: createdAt
             });
+        }
+
+        if (!snapshotOrdered) {
+            orders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         }
 
         return res.json({ orders });
     } catch (err) {
-        console.error(err);
+        console.error('orders history error:', err);
         return res.status(500).json({ error: err.message });
     }
 });
