@@ -83,6 +83,55 @@ class ApiService {
     return [];
   }
 
+  // 1b. Get Pending Reviews for Moderation (Product Manager)
+  Future<List<dynamic>> getPendingReviewsForModeration() async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return [];
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/reviews/moderation'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body)['reviews'] ?? [];
+      }
+    } catch (e) {
+      print("Error fetching pending reviews: $e");
+    }
+    return [];
+  }
+
+  // 1c. Update review approval status
+  Future<bool> updateReviewApproval(
+    String reviewId,
+    String decision, {
+    String? reason,
+  }) async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return false;
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/reviews/$reviewId/approve'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'decision': decision,
+          if (reason != null && reason.isNotEmpty) 'reason': reason,
+        }),
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print("Error updating review approval: $e");
+      return false;
+    }
+  }
+
   // 2. Get My Pending Reviews
   Future<List<dynamic>> getMyPendingReviews() async {
     try {
