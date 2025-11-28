@@ -111,6 +111,7 @@ app.get('/', (req, res) => {
             '/login',
             '/register',
             '/checkout',
+            '/orders/delivery',
             '/roles',
             '/users/:id/role',
             '/users/:uid/orders'
@@ -244,7 +245,7 @@ app.post('/register', async (req, res) => {
 // Checkout endpoint
 app.post('/checkout', async (req, res) => {
     try {
-        const { user_id, items, status } = req.body || {};
+        const { user_id, items } = req.body || {};
 
         if (!user_id) {
             return res.status(400).json({
@@ -284,6 +285,8 @@ app.post('/checkout', async (req, res) => {
         }
 
         const normalizedUserId = /^\d+$/.test(String(user_id)) ? Number(user_id) : user_id;
+
+        const initialStatus = 'processing';
 
         const orderResult = await db.runTransaction(async (tx) => {
             const productEntries = Object.entries(aggregated);
@@ -331,7 +334,7 @@ app.post('/checkout', async (req, res) => {
             const orderPayload = {
                 order_id: orderId,
                 user_id: normalizedUserId,
-                status: status || 'processing',
+                status: initialStatus,
                 total_amount: Number(computedTotal.toFixed(2)),
                 items: sanitizedItems,
                 created_at: FieldValue.serverTimestamp()
@@ -364,6 +367,24 @@ app.post('/checkout', async (req, res) => {
         }
         return res.status(500).json({
             error: 'Failed to process checkout',
+            details: err.message
+        });
+    }
+});
+
+// Delivery queue endpoint
+app.get('/orders/delivery', authenticate, authorize(['product_manager']), async (req, res) => {
+    try {
+        const snapshot = await db.collection('orders')
+            .where('status', 'in', ['processing', 'in-transit'])
+            .get();
+
+        const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        return res.json({ orders });
+    } catch (err) {
+        console.error('Delivery queue error:', err);
+        return res.status(500).json({
+            error: 'Failed to load delivery queue',
             details: err.message
         });
     }
