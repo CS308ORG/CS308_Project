@@ -23,6 +23,137 @@ if (serviceAccountPath) {
 const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
 
+// PDF and Email dependencies (Feature 4.2)
+const nodemailer = require('nodemailer');
+const PDFDocument = require('pdfkit');
+const fs = require('fs');
+const path = require('path');
+
+// Email transporter configuration (Feature 4.2)
+// Only create if nodemailer is available
+let emailTransporter = null;
+if (nodemailer && typeof nodemailer.createTransport === 'function') {
+    emailTransporter = nodemailer.createTransport({
+        service: process.env.EMAIL_SERVICE || 'gmail',
+        auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS
+        }
+    });
+} else {
+    console.warn('⚠️ Email not configured. Invoice emails will be skipped.');
+}
+
+// Helper: Generate PDF Invoice (Feature 4.2 by İrem Ulusal)
+async function generateInvoicePDF(orderData, userEmail) {
+    return new Promise((resolve, reject) => {
+        const doc = new PDFDocument();
+        const fileName = `invoice_${orderData.order_id}_${Date.now()}.pdf`;
+        const filePath = path.join(__dirname, 'temp', fileName);
+        
+        // Create temp directory if it doesn't exist
+        if (!fs.existsSync(path.join(__dirname, 'temp'))) {
+            fs.mkdirSync(path.join(__dirname, 'temp'));
+        }
+        
+        const writeStream = fs.createWriteStream(filePath);
+        doc.pipe(writeStream);
+        
+        // PDF Header
+        doc.fontSize(20).text('INVOICE', { align: 'center' });
+        doc.moveDown();
+        
+        // Order Information
+        doc.fontSize(12);
+        doc.text(`Order ID: #${orderData.order_id}`);
+        doc.text(`Date: ${new Date().toLocaleString('en-US')}`);
+        doc.text(`Customer Email: ${userEmail}`);
+        doc.text(`Status: ${orderData.status}`);
+        doc.moveDown();
+        
+        // Items Table Header
+        doc.fontSize(14).text('Order Items:', { underline: true });
+        doc.moveDown(0.5);
+        doc.fontSize(10);
+        
+        // Table headers
+        doc.text('Product ID', 50, doc.y, { continued: true, width: 80 });
+        doc.text('Quantity', 150, doc.y, { continued: true, width: 80 });
+        doc.text('Price', 250, doc.y, { continued: false, width: 100 });
+        doc.moveDown();
+        
+        // Items
+        orderData.items.forEach(item => {
+            const y = doc.y;
+            doc.text(item.product_id, 50, y, { continued: true, width: 80 });
+            doc.text(item.quantity, 150, y, { continued: true, width: 80 });
+            doc.text(`$${item.unit_price || 0}`, 250, y, { continued: false, width: 100 });
+            doc.moveDown(0.5);
+        });
+        
+        // Total
+        doc.moveDown();
+        doc.fontSize(14);
+        doc.text(`Total Amount: $${orderData.total_amount.toFixed(2)}`, { align: 'right' });
+        
+        // Footer
+        doc.moveDown(2);
+        doc.fontSize(10).text('Thank you for your purchase!', { align: 'center' });
+        
+        doc.end();
+        
+        writeStream.on('finish', () => resolve(filePath));
+        writeStream.on('error', reject);
+    });
+}
+
+// Helper: Send Invoice Email (Feature 4.2 by İrem Ulusal)
+async function sendInvoiceEmail(userEmail, orderData, pdfPath) {
+    // Check if email is configured
+    if (!emailTransporter) {
+        console.warn('⚠️ Email transporter not available. Skipping email.');
+        // Clean up temp PDF file
+        try { fs.unlinkSync(pdfPath); } catch(e) {}
+        return false;
+    }
+    
+    const mailOptions = {
+        from: process.env.EMAIL_USER || 'noreply@cs308shop.com',
+        to: userEmail,
+        subject: `Invoice for Order #${orderData.order_id}`,
+        html: `
+            <h2>Thank you for your order!</h2>
+            <p>Your order <strong>#${orderData.order_id}</strong> has been confirmed.</p>
+            <p><strong>Total Amount:</strong> $${orderData.total_amount.toFixed(2)}</p>
+            <p>Please find your invoice attached.</p>
+            <br>
+            <p>Best regards,<br>CS308 Shop Team</p>
+        `,
+        attachments: [
+            {
+                filename: `invoice_${orderData.order_id}.pdf`,
+                path: pdfPath
+            }
+        ]
+    };
+    
+    try {
+        const info = await emailTransporter.sendMail(mailOptions);
+        console.log(`Invoice email sent to ${userEmail}: ${info.messageId}`);
+        
+        // Clean up temp PDF file
+        fs.unlinkSync(pdfPath);
+        
+        return true;
+    } catch (err) {
+        console.error('Email send error:', err);
+        // Clean up temp PDF file
+        try { fs.unlinkSync(pdfPath); } catch(e) {}
+        // Don't throw error - order should still succeed even if email fails
+        return false;
+    }
+}
+
 // --- AUTH MIDDLEWARE ---
 
 function getTokenFromHeader(req) {
@@ -110,11 +241,17 @@ app.get('/', (req, res) => {
             '/collections/:name',
             '/login',
             '/register',
-            '/checkout',
+            '/logout - Save cart and logout (Feature 4.1.2)',
+            '/users/:uid/cart - GET/POST saved cart (Feature 4.1.2)',
+            '/checkout - Creates order & sends PDF invoice email (Feature 4.2)',
             '/orders/delivery',
             '/roles',
             '/users/:id/role',
-            '/users/:uid/orders'
+            '/users/:uid/orders',
+            '/products/:id/reviews',
+            '/my-pending-reviews',
+            '/reviews - POST/DELETE',
+            '/auth/* - Login-Sign Up routes'
         ]
     });
 });
@@ -344,6 +481,28 @@ app.post('/checkout', async (req, res) => {
             return { id: orderRef.id, ...orderPayload };
         });
 
+        // Feature 4.2: Send PDF Invoice Email
+        try {
+            // Get user email
+            const userDoc = await db.collection('users').doc(String(normalizedUserId)).get();
+            const userEmail = userDoc.exists ? userDoc.data().email : null;
+            
+            if (userEmail && process.env.EMAIL_USER) {
+                // Generate PDF invoice
+                const pdfPath = await generateInvoicePDF(orderResult, userEmail);
+                
+                // Send email with PDF attachment
+                await sendInvoiceEmail(userEmail, orderResult, pdfPath);
+                
+                console.log(`✅ Invoice sent to ${userEmail} for order #${orderResult.order_id}`);
+            } else {
+                console.warn('⚠️ Email not configured or user email not found. Skipping invoice email.');
+            }
+        } catch (emailErr) {
+            // Don't fail the order if email fails
+            console.error('Invoice email error (non-critical):', emailErr.message);
+        }
+        
         return res.status(201).json({
             success: true,
             message: 'Order created and stock updated',
@@ -674,6 +833,91 @@ app.delete('/reviews/:id', authenticate, async (req, res) => {
         return res.json({ success: true });
     } catch (err) {
         return res.status(500).json({ error: err.message });
+    }
+});
+
+// ============================================
+// CART ENDPOINTS (Feature 4.1.2 by İrem Ulusal)
+// ============================================
+
+// POST /users/:uid/cart - Save cart to user account
+app.post('/users/:uid/cart', authenticate, async (req, res) => {
+    const uid = req.params.uid;
+    const { items } = req.body;
+    
+    // Security check
+    if (req.user.uid !== uid) {
+        return res.status(403).json({ error: 'Unauthorized' });
+    }
+    
+    try {
+        await db.collection('users').doc(uid).set({
+            saved_cart: items || []
+        }, { merge: true });
+        
+        return res.json({
+            success: true,
+            message: 'Cart saved successfully'
+        });
+    } catch (err) {
+        console.error('Save cart error:', err);
+        return res.status(500).json({
+            error: 'Failed to save cart',
+            details: err.message
+        });
+    }
+});
+
+// GET /users/:uid/cart - Get saved cart from user account
+app.get('/users/:uid/cart', authenticate, async (req, res) => {
+    const uid = req.params.uid;
+    
+    // Security check
+    if (req.user.uid !== uid) {
+        return res.status(403).json({ error: 'Unauthorized' });
+    }
+    
+    try {
+        const userDoc = await db.collection('users').doc(uid).get();
+        
+        if (!userDoc.exists) {
+            return res.json({ cart: [] });
+        }
+        
+        const cart = userDoc.data().saved_cart || [];
+        return res.json({ cart });
+    } catch (err) {
+        console.error('Get cart error:', err);
+        return res.status(500).json({
+            error: 'Failed to get cart',
+            details: err.message
+        });
+    }
+});
+
+// POST /logout - Save cart and logout (Feature 4.1.2)
+app.post('/logout', authenticate, async (req, res) => {
+    const { cart } = req.body;
+    const uid = req.user.uid;
+    
+    try {
+        // Save cart to user account before logout
+        if (cart && Array.isArray(cart)) {
+            await db.collection('users').doc(uid).set({
+                saved_cart: cart
+            }, { merge: true });
+        }
+        
+        return res.json({
+            success: true,
+            message: 'Cart saved and logged out successfully'
+        });
+    } catch (err) {
+        console.error('Logout error:', err);
+        return res.status(500).json({
+            error: 'Failed to logout',
+            details: err.message
+        });
     }
 });
 
