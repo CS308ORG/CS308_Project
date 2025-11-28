@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'api_service.dart';
+import 'cart_service.dart';
 
 class AuthService extends ChangeNotifier {
   static final AuthService _instance = AuthService._internal();
@@ -27,6 +28,8 @@ class AuthService extends ChangeNotifier {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
           _currentUser = data['user'];
+          final userKey = _resolveUserKey(_currentUser);
+          await CartService().loadCartForUser(userKey);
           // If your backend returns a token, store it here.
           // For now, we assume simple session based on user object existence.
           notifyListeners();
@@ -40,13 +43,21 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  void logout() {
+  Future<void> logout() async {
     _currentUser = null;
     _token = null;
+    await CartService().loadCartForUser(null);
     notifyListeners();
   }
 
   // Helper to get display name
   String get userName =>
       _currentUser?['name'] ?? _currentUser?['email']?.split('@')[0] ?? 'User';
+
+  String? _resolveUserKey(Map<String, dynamic>? user) {
+    if (user == null) return null;
+    if (user['id'] != null) return user['id'].toString();
+    if (user['user_id'] != null) return user['user_id'].toString();
+    return null;
+  }
 }

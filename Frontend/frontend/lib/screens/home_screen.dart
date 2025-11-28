@@ -308,8 +308,7 @@ class _StoreLayoutState extends State<StoreLayout> {
                     } else if (value == 'info') {
                       // Navigate to Info (Placeholder)
                     } else if (value == 'logout') {
-                      CartService().clearCart();
-                      AuthService().logout(); // Use AuthService logout
+                      await AuthService().logout(); // clears current session + cart view
                       setState(() {});
                       Navigator.of(context).pushAndRemoveUntil(
                         MaterialPageRoute(builder: (context) => HomeScreen()),
