@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import 'home_screen.dart';
+import '../services/cart_service.dart';
+import '../services/auth_service.dart';
+import '../services/api_service.dart';
+import 'invoice_page.dart';
 
 class CreditCardPage extends StatefulWidget {
   final double totalPrice;
@@ -89,7 +92,7 @@ class _CreditCardPageState extends State<CreditCardPage> {
                   // Next Button
                   ElevatedButton.icon(
                     onPressed: () {
-                      _showSuccessDialog();
+                      _processCheckout();
                     },
                     icon: Icon(Icons.arrow_forward, color: Colors.white),
                     label: Text('Next'),
@@ -164,21 +167,73 @@ class _CreditCardPageState extends State<CreditCardPage> {
     );
   }
 
-  void _showSuccessDialog() {
+
+  Future<void> _processCheckout() async {
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      final cartService = CartService();
+      final authService = AuthService();
+      final apiService = ApiService();
+
+      // Get current user ID
+      final userId = authService.currentUser?['id']?.toString() ??
+          authService.currentUser?['user_id']?.toString();
+
+      if (userId == null) {
+        Navigator.pop(context); // Close loading
+        _showErrorDialog('You must be logged in to checkout');
+        return;
+      }
+
+      // Get cart items
+      final cartItems = cartService.items;
+      if (cartItems.isEmpty) {
+        Navigator.pop(context); // Close loading
+        _showErrorDialog('Your cart is empty');
+        return;
+      }
+
+      // Call checkout endpoint
+      final result = await apiService.checkout(userId, cartItems);
+
+      Navigator.pop(context); // Close loading
+
+      if (result != null && result['success'] == true) {
+        // Clear cart after successful checkout
+        await cartService.clearCart();
+        
+        // Navigate to invoice page instead of showing dialog
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => InvoicePage(orderData: result['order'] ?? result),
+          ),
+        );
+      } else {
+        _showErrorDialog('Checkout failed. Please try again.');
+      }
+    } catch (e) {
+      Navigator.pop(context); // Close loading
+      _showErrorDialog('An error occurred: ${e.toString()}');
+    }
+  }
+
+  void _showErrorDialog(String message) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Payment Successful!'),
-        content: Text('Your order has been placed successfully.'),
+        title: Text('Error'),
+        content: Text(message),
         actions: [
           TextButton(
-            onPressed: () {
-              // Go back to home screen
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (context) => HomeScreen()),
-                (route) => false,
-              );
-            },
+            onPressed: () => Navigator.pop(context),
             child: Text('OK', style: TextStyle(color: Color(0xFFFF7733))),
           ),
         ],

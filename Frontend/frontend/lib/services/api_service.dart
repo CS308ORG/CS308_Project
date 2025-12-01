@@ -215,4 +215,35 @@ class ApiService {
     }
     return false;
   }
+
+  // 6. Checkout - Create order from cart items
+  Future<Map<String, dynamic>?> checkout(String userId, List<Map<String, dynamic>> cartItems) async {
+    try {
+      // Convert cart items to checkout format
+      final items = cartItems.map((item) => {
+        'product_id': item['id'],
+        'quantity': item['quantity'] ?? 1,
+      }).toList();
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/checkout'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'user_id': userId,
+          'items': items,
+        }),
+      );
+
+      if (response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        return data;
+      } else {
+        print("Checkout failed: ${response.statusCode} - ${response.body}");
+        return null;
+      }
+    } catch (e) {
+      print("Error during checkout: $e");
+      return null;
+    }
+  }
 }
