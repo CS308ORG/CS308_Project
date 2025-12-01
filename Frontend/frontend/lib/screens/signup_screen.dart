@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../services/api_service.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -9,6 +10,7 @@ class SignupScreen extends StatefulWidget {
 
 class _SignupScreenState extends State<SignupScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -24,46 +26,40 @@ class _SignupScreenState extends State<SignupScreen> {
     });
 
     try {
-      // Create user with Firebase Auth
-      final credential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
+      // Register user with Backend API
+      final response = await http.post(
+        Uri.parse('${ApiService.baseUrl}/auth/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'name': _nameController.text.trim(),
+          'email': _emailController.text.trim(),
+          'password': _passwordController.text,
+          'address': '', // Optional
+        }),
       );
 
-      print('User created: ${credential.user!.uid}');
+      final data = jsonDecode(response.body);
 
-      // Set default role as 'customer' in backend
-      final apiService = ApiService();
-      await apiService.setUserRole(credential.user!.uid, 'customer');
-
-      print('Role set to customer');
-
-      // Show success and go back to login
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Account created successfully! Please login.'),
-          backgroundColor: Colors.green,
-        ),
-      );
-      Navigator.pop(context);
-    } on FirebaseAuthException catch (e) {
-      setState(() {
-        _isLoading = false;
-        if (e.code == 'weak-password') {
-          _errorMessage = 'Password is too weak (minimum 6 characters).';
-        } else if (e.code == 'email-already-in-use') {
-          _errorMessage = 'An account already exists for this email.';
-        } else if (e.code == 'invalid-email') {
-          _errorMessage = 'Invalid email address.';
-        } else {
-          _errorMessage = e.message ?? 'Signup failed';
-        }
-      });
+      if (response.statusCode == 201 && data['success'] == true) {
+        // Show success and go back to login
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Account created successfully! Please login.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context);
+      } else {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = data['message'] ?? 'Signup failed. Please try again.';
+        });
+      }
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Error: $e';
+        _errorMessage = 'Error: ${e.toString()}';
       });
     }
   }
@@ -109,6 +105,23 @@ class _SignupScreenState extends State<SignupScreen> {
                       style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                     ),
                     SizedBox(height: 32),
+                    
+                    // Name Field
+                    TextFormField(
+                      controller: _nameController,
+                      decoration: InputDecoration(
+                        labelText: 'Full Name',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.person),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter your name';
+                        }
+                        return null;
+                      },
+                    ),
+                    SizedBox(height: 16),
                     
                     // Email Field
                     TextFormField(
@@ -233,6 +246,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
   @override
   void dispose() {
+    _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();

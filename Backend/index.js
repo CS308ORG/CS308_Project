@@ -23,6 +23,9 @@ if (serviceAccountPath) {
 const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
 
+// Password hashing
+const bcrypt = require('bcrypt');
+
 // PDF and Email dependencies (Feature 4.2)
 const nodemailer = require('nodemailer');
 const PDFDocument = require('pdfkit');
@@ -291,7 +294,17 @@ app.post('/login', async (req, res) => {
         const userDoc = snapshot.docs[0];
         const userData = userDoc.data();
 
-        if (userData.password !== password) {
+        // Check if password is hashed (starts with $2b$) or plain text
+        let isPasswordValid = false;
+        if (userData.password && userData.password.startsWith('$2b$')) {
+            // Password is hashed, use bcrypt.compare
+            isPasswordValid = await bcrypt.compare(password, userData.password);
+        } else {
+            // Password is plain text (for backward compatibility with old data)
+            isPasswordValid = userData.password === password;
+        }
+
+        if (!isPasswordValid) {
             return res.status(401).json({
                 error: 'Invalid credentials',
                 details: 'Incorrect password'
@@ -362,10 +375,14 @@ app.post('/register', async (req, res) => {
         });
         const newUserId = maxUserId + 1;
 
+        // Hash the password before storing
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
+
         const newUser = {
             user_id: newUserId,
             email: email,
-            password: password,
+            password: hashedPassword, // Store hashed password
             name: name,
             address: address || '',
         };
