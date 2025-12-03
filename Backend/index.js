@@ -36,13 +36,28 @@ const path = require('path');
 // Only create if nodemailer is available
 let emailTransporter = null;
 if (nodemailer && typeof nodemailer.createTransport === 'function') {
-    emailTransporter = nodemailer.createTransport({
-        service: process.env.EMAIL_SERVICE || 'gmail',
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS
-        }
-    });
+    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+        emailTransporter = nodemailer.createTransport({
+            service: process.env.EMAIL_SERVICE || 'gmail',
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS
+            }
+        });
+        
+        // Verify email transporter connection on startup
+        emailTransporter.verify(function(error, success) {
+            if (error) {
+                console.error('❌ Email transporter verification failed:', error.message);
+                console.error('   Please check your EMAIL_USER and EMAIL_PASS in .env file');
+                console.error('   Make sure you are using a Gmail App Password (not your regular password)');
+            } else {
+                console.log('✅ Email transporter verified successfully');
+            }
+        });
+    } else {
+        console.warn('⚠️ Email not configured. EMAIL_USER or EMAIL_PASS missing in .env');
+    }
 } else {
     console.warn('⚠️ Email not configured. Invoice emails will be skipped.');
 }
