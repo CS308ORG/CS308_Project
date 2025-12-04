@@ -46,7 +46,14 @@ class AuthService extends ChangeNotifier {
   Future<void> logout() async {
     _currentUser = null;
     _token = null;
+
+    // 1. Switch context to Guest (unlogged)
     await CartService().loadCartForUser(null);
+
+    // 2. Clear the guest cart immediately to ensure a fresh start
+    // This wipes any previous guest data, ensuring the basket is empty.
+    await CartService().clearCart();
+
     notifyListeners();
   }
 
