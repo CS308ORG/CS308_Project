@@ -14,7 +14,7 @@ from firebase_admin import credentials, firestore
 # Use env var if provided, else default to your local JSON path
 SERVICE_ACCOUNT_PATH = os.environ.get(
     "SERVICE_ACCOUNT_PATH",
-    "/Users/mehmetsalcan/Desktop/untitled folder/cs308db-firebase-adminsdk-fbsvc-3a93f74bd8.json",
+    "./cs308db-firebase-adminsdk-fbsvc-3a93f74bd8.json",
 )
 
 
@@ -374,140 +374,140 @@ def main() -> None:
         # --- Product 1: Wireless Headphones ---
         {
             "review_id": 101, "user_id": 1, "author_name": "Ali Yılmaz", "product_id": 1,
-            "rating": 5, "comment": "Ses kalitesi harika, baslar çok güçlü.", "status": "approved", "timestamp": "2023-10-01T10:00:00Z"
+            "rating": 5, "comment": "Ses kalitesi harika, baslar çok güçlü.", "approval_status": "approved", "timestamp": "2023-10-01T10:00:00Z"
         },
         {
             "review_id": 102, "user_id": 2, "author_name": "Ayşe Demir", "product_id": 1,
-            "rating": 4, "comment": "Kulaklık biraz ağır ama performansı süper.", "status": "approved", "timestamp": "2023-10-02T14:30:00Z"
+            "rating": 4, "comment": "Kulaklık biraz ağır ama performansı süper.", "approval_status": "approved", "timestamp": "2023-10-02T14:30:00Z"
         },
         {
             "review_id": 103, "user_id": 3, "author_name": "Mehmet Kaya", "product_id": 1,
-            "rating": 5, "comment": "", "status": "approved", "timestamp": "2023-10-03T09:15:00Z"
+            "rating": 5, "comment": "", "approval_status": "approved", "timestamp": "2023-10-03T09:15:00Z"
         },
         {
             "review_id": 104, "user_id": 4, "author_name": "Zeynep Koç", "product_id": 1,
-            "rating": 5, "comment": "", "status": "approved", "timestamp": "2023-10-05T16:20:00Z"
+            "rating": 5, "comment": "", "approval_status": "approved", "timestamp": "2023-10-05T16:20:00Z"
         },
         # --- Product 2: Smartphone X 256GB ---
         {
             "review_id": 201, "user_id": 5, "author_name": "Eren Şahin", "product_id": 2,
-            "rating": 4, "comment": "Ekran kalitesi muazzam, fakat şarjı 1 günü zor çıkarıyor.", "status": "approved", "timestamp": "2023-10-06T11:00:00Z"
+            "rating": 4, "comment": "Ekran kalitesi muazzam, fakat şarjı 1 günü zor çıkarıyor.", "approval_status": "approved", "timestamp": "2023-10-06T11:00:00Z"
         },
         {
             "review_id": 202, "user_id": 6, "author_name": "Elif Acar", "product_id": 2,
-            "rating": 5, "comment": "Fiyat performans ürünü, tavsiye ederim.", "status": "approved", "timestamp": "2023-10-07T15:45:00Z"
+            "rating": 5, "comment": "Fiyat performans ürünü, tavsiye ederim.", "approval_status": "approved", "timestamp": "2023-10-07T15:45:00Z"
         },
         {
             "review_id": 203, "user_id": 7, "author_name": "Can Arslan", "product_id": 2,
-            "rating": 4, "comment": "", "status": "approved", "timestamp": "2023-10-08T10:30:00Z"
+            "rating": 4, "comment": "", "approval_status": "approved", "timestamp": "2023-10-08T10:30:00Z"
         },
         # --- Product 3: Laptop Pro 14 ---
         {
             "review_id": 301, "user_id": 8, "author_name": "Naz Aydın", "product_id": 3,
-            "rating": 5, "comment": "İş için aldım, hızı inanılmaz.", "status": "approved", "timestamp": "2023-10-09T09:00:00Z"
+            "rating": 5, "comment": "İş için aldım, hızı inanılmaz.", "approval_status": "approved", "timestamp": "2023-10-09T09:00:00Z"
         },
         {
             "review_id": 302, "user_id": 9, "author_name": "Mert Yıldız", "product_id": 3,
-            "rating": 3, "comment": "Fan sesi biraz fazla çıkıyor yük altında.", "status": "approved", "timestamp": "2023-10-10T13:20:00Z"
+            "rating": 3, "comment": "Fan sesi biraz fazla çıkıyor yük altında.", "approval_status": "approved", "timestamp": "2023-10-10T13:20:00Z"
         },
         {
             "review_id": 303, "user_id": 10, "author_name": "Deniz Güneş", "product_id": 3,
-            "rating": 5, "comment": "", "status": "approved", "timestamp": "2023-10-11T16:50:00Z"
+            "rating": 5, "comment": "", "approval_status": "approved", "timestamp": "2023-10-11T16:50:00Z"
         },
         {
             "review_id": 304, "user_id": 1, "author_name": "Ali Yılmaz", "product_id": 3,
-            "rating": 4, "comment": "", "status": "approved", "timestamp": "2023-10-12T12:10:00Z"
+            "rating": 4, "comment": "", "approval_status": "approved", "timestamp": "2023-10-12T12:10:00Z"
         },
         # --- Product 4: Cotton T-Shirt L ---
         {
             "review_id": 401, "user_id": 2, "author_name": "Ayşe Demir", "product_id": 4,
-            "rating": 5, "comment": "Kumaşı çok yumuşak, tam beden.", "status": "approved", "timestamp": "2023-10-13T14:00:00Z"
+            "rating": 5, "comment": "Kumaşı çok yumuşak, tam beden.", "approval_status": "approved", "timestamp": "2023-10-13T14:00:00Z"
         },
         {
             "review_id": 402, "user_id": 3, "author_name": "Mehmet Kaya", "product_id": 4,
-            "rating": 2, "comment": "İlk yıkamada çekti maalesef.", "status": "approved", "timestamp": "2023-10-14T10:30:00Z"
+            "rating": 2, "comment": "İlk yıkamada çekti maalesef.", "approval_status": "approved", "timestamp": "2023-10-14T10:30:00Z"
         },
         {
             "review_id": 403, "user_id": 4, "author_name": "Zeynep Koç", "product_id": 4,
-            "rating": 5, "comment": "", "status": "approved", "timestamp": "2023-10-15T11:45:00Z"
+            "rating": 5, "comment": "", "approval_status": "approved", "timestamp": "2023-10-15T11:45:00Z"
         },
         # --- Product 5: Air Fryer 4L ---
         {
             "review_id": 501, "user_id": 5, "author_name": "Eren Şahin", "product_id": 5,
-            "rating": 5, "comment": "Mutfağımın vazgeçilmezi oldu, patatesler harika.", "status": "approved", "timestamp": "2023-10-16T17:00:00Z"
+            "rating": 5, "comment": "Mutfağımın vazgeçilmezi oldu, patatesler harika.", "approval_status": "approved", "timestamp": "2023-10-16T17:00:00Z"
         },
         {
             "review_id": 502, "user_id": 6, "author_name": "Elif Acar", "product_id": 5,
-            "rating": 5, "comment": "", "status": "approved", "timestamp": "2023-10-17T09:20:00Z"
+            "rating": 5, "comment": "", "approval_status": "approved", "timestamp": "2023-10-17T09:20:00Z"
         },
         {
             "review_id": 503, "user_id": 7, "author_name": "Can Arslan", "product_id": 5,
-            "rating": 4, "comment": "", "status": "approved", "timestamp": "2023-10-18T13:10:00Z"
+            "rating": 4, "comment": "", "approval_status": "approved", "timestamp": "2023-10-18T13:10:00Z"
         },
         # --- Product 6: Bluetooth Speaker ---
         {
             "review_id": 601, "user_id": 8, "author_name": "Naz Aydın", "product_id": 6,
-            "rating": 4, "comment": "Sesi boyutuna göre çok iyi.", "status": "approved", "timestamp": "2023-10-19T15:30:00Z"
+            "rating": 4, "comment": "Sesi boyutuna göre çok iyi.", "approval_status": "approved", "timestamp": "2023-10-19T15:30:00Z"
         },
         {
             "review_id": 602, "user_id": 9, "author_name": "Mert Yıldız", "product_id": 6,
-            "rating": 5, "comment": "", "status": "approved", "timestamp": "2023-10-20T10:00:00Z"
+            "rating": 5, "comment": "", "approval_status": "approved", "timestamp": "2023-10-20T10:00:00Z"
         },
         {
             "review_id": 603, "user_id": 10, "author_name": "Deniz Güneş", "product_id": 6,
-            "rating": 5, "comment": "", "status": "approved", "timestamp": "2023-10-21T18:45:00Z"
+            "rating": 5, "comment": "", "approval_status": "approved", "timestamp": "2023-10-21T18:45:00Z"
         },
         # --- Product 7: Game Controller ---
         {
             "review_id": 701, "user_id": 1, "author_name": "Ali Yılmaz", "product_id": 7,
-            "rating": 5, "comment": "Tuş hassasiyeti mükemmel, gecikme yok.", "status": "approved", "timestamp": "2023-10-22T11:15:00Z"
+            "rating": 5, "comment": "Tuş hassasiyeti mükemmel, gecikme yok.", "approval_status": "approved", "timestamp": "2023-10-22T11:15:00Z"
         },
         {
             "review_id": 702, "user_id": 2, "author_name": "Ayşe Demir", "product_id": 7,
-            "rating": 3, "comment": "Analoglar biraz sert geldi bana.", "status": "approved", "timestamp": "2023-10-23T14:50:00Z"
+            "rating": 3, "comment": "Analoglar biraz sert geldi bana.", "approval_status": "approved", "timestamp": "2023-10-23T14:50:00Z"
         },
         {
             "review_id": 703, "user_id": 3, "author_name": "Mehmet Kaya", "product_id": 7,
-            "rating": 5, "comment": "", "status": "approved", "timestamp": "2023-10-24T09:40:00Z"
+            "rating": 5, "comment": "", "approval_status": "approved", "timestamp": "2023-10-24T09:40:00Z"
         },
         # --- Product 8: Vacuum Cleaner ---
         {
             "review_id": 801, "user_id": 4, "author_name": "Zeynep Koç", "product_id": 8,
-            "rating": 5, "comment": "Çekim gücü inanılmaz, halıları kaldırıyor.", "status": "approved", "timestamp": "2023-10-25T16:00:00Z"
+            "rating": 5, "comment": "Çekim gücü inanılmaz, halıları kaldırıyor.", "approval_status": "approved", "timestamp": "2023-10-25T16:00:00Z"
         },
         {
             "review_id": 802, "user_id": 5, "author_name": "Eren Şahin", "product_id": 8,
-            "rating": 4, "comment": "", "status": "approved", "timestamp": "2023-10-26T10:20:00Z"
+            "rating": 4, "comment": "", "approval_status": "approved", "timestamp": "2023-10-26T10:20:00Z"
         },
         {
             "review_id": 803, "user_id": 6, "author_name": "Elif Acar", "product_id": 8,
-            "rating": 5, "comment": "", "status": "approved", "timestamp": "2023-10-27T13:10:00Z"
+            "rating": 5, "comment": "", "approval_status": "approved", "timestamp": "2023-10-27T13:10:00Z"
         },
         # --- Product 9: Yoga Mat ---
         {
             "review_id": 901, "user_id": 7, "author_name": "Can Arslan", "product_id": 9,
-            "rating": 5, "comment": "Kayma yapmıyor, kalınlığı ideal.", "status": "approved", "timestamp": "2023-10-28T08:50:00Z"
+            "rating": 5, "comment": "Kayma yapmıyor, kalınlığı ideal.", "approval_status": "approved", "timestamp": "2023-10-28T08:50:00Z"
         },
         {
             "review_id": 902, "user_id": 8, "author_name": "Naz Aydın", "product_id": 9,
-            "rating": 5, "comment": "Rengi göründüğü gibi canlı.", "status": "approved", "timestamp": "2023-10-29T19:00:00Z"
+            "rating": 5, "comment": "Rengi göründüğü gibi canlı.", "approval_status": "approved", "timestamp": "2023-10-29T19:00:00Z"
         },
         {
             "review_id": 903, "user_id": 9, "author_name": "Mert Yıldız", "product_id": 9,
-            "rating": 4, "comment": "", "status": "approved", "timestamp": "2023-10-30T12:30:00Z"
+            "rating": 4, "comment": "", "approval_status": "approved", "timestamp": "2023-10-30T12:30:00Z"
         },
         # --- Product 10: Sci-Fi Novel ---
         {
             "review_id": 1001, "user_id": 10, "author_name": "Deniz Güneş", "product_id": 10,
-            "rating": 5, "comment": "Bir solukta okudum, harika bir kurgu.", "status": "approved", "timestamp": "2023-11-01T20:00:00Z"
+            "rating": 5, "comment": "Bir solukta okudum, harika bir kurgu.", "approval_status": "approved", "timestamp": "2023-11-01T20:00:00Z"
         },
         {
             "review_id": 1002, "user_id": 1, "author_name": "Ali Yılmaz", "product_id": 10,
-            "rating": 4, "comment": "Sonu biraz aceleye gelmiş gibiydi ama güzel.", "status": "approved", "timestamp": "2023-11-02T09:15:00Z"
+            "rating": 4, "comment": "Sonu biraz aceleye gelmiş gibiydi ama güzel.", "approval_status": "approved", "timestamp": "2023-11-02T09:15:00Z"
         },
         {
             "review_id": 1003, "user_id": 2, "author_name": "Ayşe Demir", "product_id": 10,
-            "rating": 5, "comment": "", "status": "approved", "timestamp": "2023-11-03T15:40:00Z"
+            "rating": 5, "comment": "", "approval_status": "approved", "timestamp": "2023-11-03T15:40:00Z"
         },
     ]
 
