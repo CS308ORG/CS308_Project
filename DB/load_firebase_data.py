@@ -170,6 +170,7 @@ def main() -> None:
             "quantity_in_stock": 0,
             "distributor_info": "TechDistributors",
             "category_ids": [1, 5],  # Electronics + Audio
+            "image_url": "https://storage.googleapis.com/cs308db.firebasestorage.app/products/Wireless Headphones.png"
         },
         {
             "product_id": 2,
@@ -180,6 +181,7 @@ def main() -> None:
             "quantity_in_stock": 20,
             "distributor_info": "MobilePro",
             "category_ids": [6],  # Phones
+            "image_url": "https://storage.googleapis.com/cs308db.firebasestorage.app/products/Smartphone.png"
         },
         {
             "product_id": 3,
@@ -190,6 +192,7 @@ def main() -> None:
             "quantity_in_stock": 15,
             "distributor_info": "CompWorld",
             "category_ids": [4],  # Computers
+            "image_url": "https://storage.googleapis.com/cs308db.firebasestorage.app/products/Laptop.png"
         },
         {
             "product_id": 4,
@@ -200,6 +203,7 @@ def main() -> None:
             "quantity_in_stock": 60,
             "distributor_info": "FashionTextiles",
             "category_ids": [2],  # Wear
+            "image_url": "https://storage.googleapis.com/cs308db.firebasestorage.app/products/T shirt.png"
         },
         {
             "product_id": 5,
@@ -210,6 +214,7 @@ def main() -> None:
             "quantity_in_stock": 25,
             "distributor_info": "KitchenPro",
             "category_ids": [1, 3],  # Electronics + Home Appliances
+            "image_url": "https://storage.googleapis.com/cs308db.firebasestorage.app/products/Aır Fryer.png"
         },
         {
             "product_id": 6,
@@ -220,6 +225,7 @@ def main() -> None:
             "quantity_in_stock": 35,
             "distributor_info": "SoundWave",
             "category_ids": [1, 5],  # Electronics + Audio
+            "image_url": "https://storage.googleapis.com/cs308db.firebasestorage.app/products/Bluetooth Speaker.png"
         },
         {
             "product_id": 7,
@@ -230,6 +236,7 @@ def main() -> None:
             "quantity_in_stock": 25,
             "distributor_info": "Gamerz",
             "category_ids": [8],  # Gaming
+            "image_url": "https://storage.googleapis.com/cs308db.firebasestorage.app/products/Controller.png"
         },
         {
             "product_id": 8,
@@ -240,6 +247,7 @@ def main() -> None:
             "quantity_in_stock": 30,
             "distributor_info": "HomeCare",
             "category_ids": [1, 3],  # Electronics + Home Appliances
+            "image_url": "https://storage.googleapis.com/cs308db.firebasestorage.app/products/Vacuum cleaner.png"
         },
         {
             "product_id": 9,
@@ -250,6 +258,7 @@ def main() -> None:
             "quantity_in_stock": 50,
             "distributor_info": "FitLife",
             "category_ids": [9],  # Sports
+            "image_url": "https://storage.googleapis.com/cs308db.firebasestorage.app/products/Yoga Mat.png"
         },
         {
             "product_id": 10,
@@ -260,6 +269,7 @@ def main() -> None:
             "quantity_in_stock": 45,
             "distributor_info": "BookHub",
             "category_ids": [10],  # Books
+            "image_url": "https://storage.googleapis.com/cs308db.firebasestorage.app/products/Scifi Novel.png"
         },
     ]
 
