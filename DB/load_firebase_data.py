@@ -167,7 +167,7 @@ def main() -> None:
             "name": "Wireless Headphones",
             "description": "High-quality over-ear wireless headphones with noise cancellation.",
             "price": 1200,
-            "stock_quantity": 0,
+            "quantity_in_stock": 0,
             "distributor_info": "TechDistributors",
             "category_ids": [1, 5],  # Electronics + Audio
         },
@@ -177,7 +177,7 @@ def main() -> None:
             "name": "Smartphone X 256GB",
             "description": "Powerful smartphone with 256GB storage and AMOLED display.",
             "price": 23000,
-            "stock_quantity": 20,
+            "quantity_in_stock": 20,
             "distributor_info": "MobilePro",
             "category_ids": [6],  # Phones
         },
@@ -187,7 +187,7 @@ def main() -> None:
             "name": "Laptop Pro 14",
             "description": "Lightweight laptop with 14-inch display and 16GB RAM.",
             "price": 32000,
-            "stock_quantity": 15,
+            "quantity_in_stock": 15,
             "distributor_info": "CompWorld",
             "category_ids": [4],  # Computers
         },
@@ -197,7 +197,7 @@ def main() -> None:
             "name": "Cotton T-Shirt L",
             "description": "Comfortable cotton T-shirt, size L.",
             "price": 350,
-            "stock_quantity": 60,
+            "quantity_in_stock": 60,
             "distributor_info": "FashionTextiles",
             "category_ids": [2],  # Wear
         },
@@ -207,7 +207,7 @@ def main() -> None:
             "name": "Air Fryer 4L",
             "description": "Healthy cooking air fryer with 4L capacity.",
             "price": 2200,
-            "stock_quantity": 25,
+            "quantity_in_stock": 25,
             "distributor_info": "KitchenPro",
             "category_ids": [1, 3],  # Electronics + Home Appliances
         },
@@ -217,7 +217,7 @@ def main() -> None:
             "name": "Bluetooth Speaker",
             "description": "Compact portable speaker with rich bass sound.",
             "price": 950,
-            "stock_quantity": 35,
+            "quantity_in_stock": 35,
             "distributor_info": "SoundWave",
             "category_ids": [1, 5],  # Electronics + Audio
         },
@@ -227,7 +227,7 @@ def main() -> None:
             "name": "Game Controller",
             "description": "Wireless controller compatible with all major consoles.",
             "price": 1500,
-            "stock_quantity": 25,
+            "quantity_in_stock": 25,
             "distributor_info": "Gamerz",
             "category_ids": [8],  # Gaming
         },
@@ -237,7 +237,7 @@ def main() -> None:
             "name": "Vacuum Cleaner",
             "description": "Lightweight bagless vacuum cleaner with high suction power.",
             "price": 1800,
-            "stock_quantity": 30,
+            "quantity_in_stock": 30,
             "distributor_info": "HomeCare",
             "category_ids": [1, 3],  # Electronics + Home Appliances
         },
@@ -247,7 +247,7 @@ def main() -> None:
             "name": "Yoga Mat",
             "description": "Non-slip yoga mat for daily workouts and stretching.",
             "price": 400,
-            "stock_quantity": 50,
+            "quantity_in_stock": 50,
             "distributor_info": "FitLife",
             "category_ids": [9],  # Sports
         },
@@ -257,7 +257,7 @@ def main() -> None:
             "name": "Sci-Fi Novel",
             "description": "Bestselling science fiction novel set in a futuristic world.",
             "price": 250,
-            "stock_quantity": 45,
+            "quantity_in_stock": 45,
             "distributor_info": "BookHub",
             "category_ids": [10],  # Books
         },
