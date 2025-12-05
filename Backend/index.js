@@ -848,7 +848,12 @@ app.post('/logout', authenticate, async (req, res) => {
 require('./auth-routes')(app, db);
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Server listening on http://localhost:${PORT}`);
-});
 
+// Only listen if this file is run directly (not required by a test)
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`Server listening on http://localhost:${PORT}`);
+    });
+}
+
+module.exports = app;
