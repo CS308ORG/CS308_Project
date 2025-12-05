@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/api_service.dart';
-import '../services/auth_service.dart'; // ADDED: Required for seeded user access
-import 'home_screen.dart'; // Contains getProductImageUrl
+import '../services/auth_service.dart';
+import 'home_screen.dart';
 
 class OrderHistoryPage extends StatefulWidget {
   @override
@@ -13,6 +13,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   final ApiService _apiService = ApiService();
   List<dynamic> _orders = [];
   bool _loading = true;
+  bool _isUsingMockData = false; // Flag for Mock Data
 
   @override
   void initState() {
@@ -21,24 +22,23 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   }
 
   Future<void> _fetchOrders() async {
-    // 1. Try getting ID from Firebase (Real Auth)
     String? uid = FirebaseAuth.instance.currentUser?.uid;
 
-    // 2. If null, try getting ID from Custom AuthService (Seeded Auth)
     if (uid == null && AuthService().isLoggedIn) {
       final currentUser = AuthService().currentUser;
-      // Handle both 'id' (string doc ID) or 'user_id' (int field)
       uid =
           currentUser?['id']?.toString() ?? currentUser?['user_id']?.toString();
     }
 
     if (uid != null) {
       try {
-        // Fetch orders from API
         List<dynamic> fetchedOrders = await _apiService.getUserOrders(uid);
 
-        // --- SIMULATED DATA FALLBACK (If API returns empty) ---
         if (fetchedOrders.isEmpty) {
+          // --- MOCK DATA FALLBACK ---
+          setState(() {
+            _isUsingMockData = true; // Enable Flag
+          });
           fetchedOrders = [
             {
               "order_id": 1001,
@@ -80,30 +80,39 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
               ],
             },
           ];
+        } else {
+          setState(() {
+            _isUsingMockData = false; // Real data found
+          });
         }
-        // -----------------------------------------------
 
-        // SORTING LOGIC
+        // --- UPDATED SORTING LOGIC ---
+        // 1. Date (Newest to Oldest)
+        // 2. Price (Highest to Lowest)
         fetchedOrders.sort((a, b) {
           final dateAStr = a['date'] as String?;
           final dateBStr = b['date'] as String?;
           final priceA = (a['total_amount'] as num?)?.toDouble() ?? 0.0;
           final priceB = (b['total_amount'] as num?)?.toDouble() ?? 0.0;
 
-          if (dateAStr == null && dateBStr == null)
-            return priceB.compareTo(priceA);
-          if (dateAStr == null) return 1;
-          if (dateBStr == null) return -1;
-
-          final dateA = DateTime.tryParse(dateAStr);
-          final dateB = DateTime.tryParse(dateBStr);
-
-          if (dateA != null && dateB != null) {
-            int dateComparison = dateB.compareTo(dateA);
-            if (dateComparison != 0) return dateComparison;
+          // Date check
+          if (dateAStr != null && dateBStr != null) {
+            final dateA = DateTime.tryParse(dateAStr);
+            final dateB = DateTime.tryParse(dateBStr);
+            if (dateA != null && dateB != null) {
+              int dateComparison = dateB.compareTo(
+                dateA,
+              ); // B vs A = Descending
+              if (dateComparison != 0) return dateComparison;
+            }
+          } else if (dateAStr != null) {
+            return -1; // A has date, A comes first
+          } else if (dateBStr != null) {
+            return 1; // B has date, B comes first
           }
 
-          return priceB.compareTo(priceA);
+          // Price check (if dates equal or missing)
+          return priceB.compareTo(priceA); // B vs A = Descending
         });
 
         if (mounted) {
@@ -117,12 +126,10 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
         if (mounted) setState(() => _loading = false);
       }
     } else {
-      // Stop loading if no user is found at all
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  /// Helper to format status strings
   String _formatStatus(String? status) {
     if (status == null) return "Unknown";
     switch (status.toLowerCase()) {
@@ -135,14 +142,12 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       case 'cancelled':
         return 'Cancelled';
       default:
-        if (status.length > 1) {
+        if (status.length > 1)
           return status[0].toUpperCase() + status.substring(1);
-        }
         return status.toUpperCase();
     }
   }
 
-  /// Helper to format date
   String _formatDate(String? dateStr) {
     if (dateStr == null) return "-";
     try {
@@ -155,7 +160,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
 
   @override
   Widget build(BuildContext context) {
-    // RESOLVE USER INFO FOR DISPLAY
     String userId = 'Unknown ID';
     String userEmail = 'No Email';
 
@@ -185,7 +189,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // --- Header Section ---
                       Padding(
                         padding: const EdgeInsets.symmetric(
                           vertical: 32,
@@ -203,7 +206,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                               ),
                             ),
                             const SizedBox(height: 24),
-                            // User Info Card
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 vertical: 16,
@@ -232,7 +234,29 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                         ),
                       ),
 
-                      // --- Orders List ---
+                      // --- ATTENTION LABEL ---
+                      if (_isUsingMockData)
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            border: Border.all(color: Colors.red),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            "ATTENTION: Could not found any orders for this user. Following is mock-data",
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+
                       if (_orders.isEmpty)
                         const Center(
                           child: Padding(
@@ -314,7 +338,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Delivery Address Header
             Row(
               children: [
                 const Icon(
@@ -340,7 +363,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
               ],
             ),
             const SizedBox(height: 16),
-
             const Text(
               "Ordered Products:",
               style: TextStyle(
@@ -350,8 +372,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
               ),
             ),
             const SizedBox(height: 8),
-
-            // --- Inner Card (Item List) ---
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -367,15 +387,12 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                     final name = item['name'] ?? 'Unknown Product';
                     final unitPrice =
                         (item['unit_price'] as num?)?.toDouble() ?? 0.0;
-                    // Format requested: ([Product Price])x([quantity])
-                    // We assume product price means Unit Price here.
                     final imageUrl = getProductImageUrl(item);
 
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12.0),
                       child: Row(
                         children: [
-                          // 1. Thumbnail
                           Container(
                             width: 48,
                             height: 48,
@@ -404,10 +421,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                                     color: Colors.grey,
                                   ),
                           ),
-
                           const SizedBox(width: 16),
-
-                          // 2. [Qty]x(ID: [ID]) [Title]
                           Expanded(
                             child: Text(
                               "${qty}x(ID: $pid) $name",
@@ -418,10 +432,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-
                           const SizedBox(width: 16),
-
-                          // 3. ([Product Price])x([Qty])
                           Text(
                             "(${unitPrice.toStringAsFixed(2)} ₺)x($qty)",
                             style: const TextStyle(
@@ -434,10 +445,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                       ),
                     );
                   }).toList(),
-
                   const Divider(height: 24),
-
-                  // Order Total
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -461,11 +469,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                 ],
               ),
             ),
-
-            // --- End Inner Card ---
             const SizedBox(height: 16),
-
-            // Footer: Date and Status
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
