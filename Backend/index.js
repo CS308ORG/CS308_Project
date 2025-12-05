@@ -32,8 +32,7 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
 
-// Email transporter configuration (Feature 4.2)
-// Only create if nodemailer is available
+// Email transporter configuration
 let emailTransporter = null;
 if (nodemailer && typeof nodemailer.createTransport === 'function') {
     if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
@@ -44,13 +43,9 @@ if (nodemailer && typeof nodemailer.createTransport === 'function') {
                 pass: process.env.EMAIL_PASS
             }
         });
-        
-        // Verify email transporter connection on startup
-        emailTransporter.verify(function(error, success) {
+        emailTransporter.verify(function (error, success) {
             if (error) {
                 console.error('❌ Email transporter verification failed:', error.message);
-                console.error('   Please check your EMAIL_USER and EMAIL_PASS in .env file');
-                console.error('   Make sure you are using a Gmail App Password (not your regular password)');
             } else {
                 console.log('✅ Email transporter verified successfully');
             }
@@ -62,45 +57,39 @@ if (nodemailer && typeof nodemailer.createTransport === 'function') {
     console.warn('⚠️ Email not configured. Invoice emails will be skipped.');
 }
 
-// Helper: Generate PDF Invoice (Feature 4.2 by İrem Ulusal)
+// Helper: Generate PDF Invoice
 async function generateInvoicePDF(orderData, userEmail) {
     return new Promise((resolve, reject) => {
         const doc = new PDFDocument();
         const fileName = `invoice_${orderData.order_id}_${Date.now()}.pdf`;
         const filePath = path.join(__dirname, 'temp', fileName);
-        
-        // Create temp directory if it doesn't exist
+
         if (!fs.existsSync(path.join(__dirname, 'temp'))) {
             fs.mkdirSync(path.join(__dirname, 'temp'));
         }
-        
+
         const writeStream = fs.createWriteStream(filePath);
         doc.pipe(writeStream);
-        
-        // PDF Header
+
         doc.fontSize(20).text('INVOICE', { align: 'center' });
         doc.moveDown();
-        
-        // Order Information
+
         doc.fontSize(12);
         doc.text(`Order ID: #${orderData.order_id}`);
         doc.text(`Date: ${new Date().toLocaleString('en-US')}`);
         doc.text(`Customer Email: ${userEmail}`);
         doc.text(`Status: ${orderData.status}`);
         doc.moveDown();
-        
-        // Items Table Header
+
         doc.fontSize(14).text('Order Items:', { underline: true });
         doc.moveDown(0.5);
         doc.fontSize(10);
-        
-        // Table headers
+
         doc.text('Product ID', 50, doc.y, { continued: true, width: 80 });
         doc.text('Quantity', 150, doc.y, { continued: true, width: 80 });
         doc.text('Price', 250, doc.y, { continued: false, width: 100 });
         doc.moveDown();
-        
-        // Items
+
         orderData.items.forEach(item => {
             const y = doc.y;
             doc.text(item.product_id, 50, y, { continued: true, width: 80 });
@@ -108,33 +97,28 @@ async function generateInvoicePDF(orderData, userEmail) {
             doc.text(`$${item.unit_price || 0}`, 250, y, { continued: false, width: 100 });
             doc.moveDown(0.5);
         });
-        
-        // Total
+
         doc.moveDown();
         doc.fontSize(14);
         doc.text(`Total Amount: $${orderData.total_amount.toFixed(2)}`, { align: 'right' });
-        
-        // Footer
+
         doc.moveDown(2);
         doc.fontSize(10).text('Thank you for your purchase!', { align: 'center' });
-        
+
         doc.end();
-        
+
         writeStream.on('finish', () => resolve(filePath));
         writeStream.on('error', reject);
     });
 }
 
-// Helper: Send Invoice Email (Feature 4.2 by İrem Ulusal)
+// Helper: Send Invoice Email
 async function sendInvoiceEmail(userEmail, orderData, pdfPath) {
-    // Check if email is configured
     if (!emailTransporter) {
-        console.warn('⚠️ Email transporter not available. Skipping email.');
-        // Clean up temp PDF file
-        try { fs.unlinkSync(pdfPath); } catch(e) {}
+        try { fs.unlinkSync(pdfPath); } catch (e) { }
         return false;
     }
-    
+
     const mailOptions = {
         from: process.env.EMAIL_USER || 'noreply@cs308shop.com',
         to: userEmail,
@@ -154,20 +138,15 @@ async function sendInvoiceEmail(userEmail, orderData, pdfPath) {
             }
         ]
     };
-    
+
     try {
         const info = await emailTransporter.sendMail(mailOptions);
         console.log(`Invoice email sent to ${userEmail}: ${info.messageId}`);
-        
-        // Clean up temp PDF file
         fs.unlinkSync(pdfPath);
-        
         return true;
     } catch (err) {
         console.error('Email send error:', err);
-        // Clean up temp PDF file
-        try { fs.unlinkSync(pdfPath); } catch(e) {}
-        // Don't throw error - order should still succeed even if email fails
+        try { fs.unlinkSync(pdfPath); } catch (e) { }
         return false;
     }
 }
@@ -184,7 +163,6 @@ async function authenticate(req, res, next) {
     const token = getTokenFromHeader(req);
     if (!token) return res.status(401).json({ error: 'Missing auth token' });
 
-    // FIX: Allow Seeded User IDs (simple numbers)
     if (/^\d+$/.test(token)) {
         try {
             const doc = await db.collection('users').doc(token).get();
@@ -197,7 +175,6 @@ async function authenticate(req, res, next) {
         }
     }
 
-    // Fallback to Firebase Auth for real users
     try {
         const decoded = await admin.auth().verifyIdToken(token);
         req.user = { uid: decoded.uid, claims: decoded };
@@ -245,7 +222,6 @@ app.get('/collections/:name', async (req, res) => {
         const collectionRef = firestore.collection(name);
         let query = collectionRef.limit(20);
 
-        // Public endpoints should never surface unapproved reviews
         if (name === 'reviews') {
             query = collectionRef.where('approval_status', '==', 'approved').limit(20);
         }
@@ -267,9 +243,7 @@ app.get('/', (req, res) => {
             '/collections/:name',
             '/login',
             '/register',
-            '/logout - Save cart and logout (Feature 4.1.2)',
-            '/users/:uid/cart - GET/POST saved cart (Feature 4.1.2)',
-            '/checkout - Creates order & sends PDF invoice email (Feature 4.2)',
+            '/checkout',
             '/orders/delivery',
             '/products/:id/reviews',
             '/reviews/moderation',
@@ -277,70 +251,50 @@ app.get('/', (req, res) => {
             '/roles',
             '/users/:id/role',
             '/users/:uid/orders',
-            '/products/:id/reviews',
             '/my-pending-reviews',
-            '/reviews - POST/DELETE',
-            '/auth/* - Login-Sign Up routes'
+            '/reviews',
+            '/auth/*'
         ]
     });
 });
+
 // Login endpoint
 app.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
-
         if (!email || !password) {
-            return res.status(400).json({
-                error: 'Email and password are required',
-                details: 'Please provide both email and password in the request body'
-            });
+            return res.status(400).json({ error: 'Email and password are required' });
         }
-
         const usersRef = db.collection('users');
         const snapshot = await usersRef.where('email', '==', email).limit(1).get();
 
         if (snapshot.empty) {
-            return res.status(401).json({
-                error: 'Invalid credentials',
-                details: 'No user found with this email'
-            });
+            return res.status(401).json({ error: 'Invalid credentials' });
         }
 
         const userDoc = snapshot.docs[0];
         const userData = userDoc.data();
 
-        // Check if password is hashed (starts with $2b$) or plain text
         let isPasswordValid = false;
         if (userData.password && userData.password.startsWith('$2b$')) {
-            // Password is hashed, use bcrypt.compare
             isPasswordValid = await bcrypt.compare(password, userData.password);
         } else {
-            // Password is plain text (for backward compatibility with old data)
             isPasswordValid = userData.password === password;
         }
 
         if (!isPasswordValid) {
-            return res.status(401).json({
-                error: 'Invalid credentials',
-                details: 'Incorrect password'
-            });
+            return res.status(401).json({ error: 'Invalid credentials' });
         }
 
         const { password: _, ...userWithoutPassword } = userData;
         return res.json({
             success: true,
             message: 'Login successful',
-            user: {
-                id: userDoc.id,
-                ...userWithoutPassword
-            }
+            user: { id: userDoc.id, ...userWithoutPassword }
         });
     } catch (err) {
         console.error('Login error:', err);
-        return res.status(500).json({
-            error: 'Failed to process login',
-            details: err.message
-        });
+        return res.status(500).json({ error: 'Failed to process login' });
     }
 });
 
@@ -348,77 +302,52 @@ app.post('/login', async (req, res) => {
 app.post('/register', async (req, res) => {
     try {
         const { email, password, name, address } = req.body;
-
         if (!email || !password || !name) {
-            return res.status(400).json({
-                error: 'Missing required fields',
-                details: 'Email, password, and name are required. Address is optional.'
-            });
+            return res.status(400).json({ error: 'Missing required fields' });
         }
-
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
-            return res.status(400).json({
-                error: 'Invalid email format',
-                details: 'Please provide a valid email address'
-            });
+            return res.status(400).json({ error: 'Invalid email format' });
         }
-
         if (password.length < 6) {
-            return res.status(400).json({
-                error: 'Password too short',
-                details: 'Password must be at least 6 characters long'
-            });
+            return res.status(400).json({ error: 'Password too short' });
         }
 
         const usersRef = db.collection('users');
         const emailCheck = await usersRef.where('email', '==', email).limit(1).get();
         if (!emailCheck.empty) {
-            return res.status(409).json({
-                error: 'Email already registered',
-                details: 'A user with this email already exists'
-            });
+            return res.status(409).json({ error: 'Email already registered' });
         }
 
         const allUsers = await usersRef.get();
         let maxUserId = 0;
         allUsers.forEach(doc => {
             const userId = doc.data().user_id;
-            if (userId && userId > maxUserId) {
-                maxUserId = userId;
-            }
+            if (userId && userId > maxUserId) maxUserId = userId;
         });
         const newUserId = maxUserId + 1;
 
-        // Hash the password before storing
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
         const newUser = {
             user_id: newUserId,
             email: email,
-            password: hashedPassword, // Store hashed password
+            password: hashedPassword,
             name: name,
             address: address || '',
         };
 
         await usersRef.doc(String(newUserId)).set(newUser);
-
         const { password: _, ...userWithoutPassword } = newUser;
         return res.status(201).json({
             success: true,
             message: 'User registered successfully',
-            user: {
-                id: String(newUserId),
-                ...userWithoutPassword
-            }
+            user: { id: String(newUserId), ...userWithoutPassword }
         });
     } catch (err) {
         console.error('Register error:', err);
-        return res.status(500).json({
-            error: 'Failed to register user',
-            details: err.message
-        });
+        return res.status(500).json({ error: 'Failed to register user' });
     }
 });
 
@@ -426,20 +355,8 @@ app.post('/register', async (req, res) => {
 app.post('/checkout', async (req, res) => {
     try {
         const { user_id, items } = req.body || {};
-
-        if (!user_id) {
-            return res.status(400).json({
-                error: 'Missing user_id',
-                details: 'Please provide the user_id placing the order'
-            });
-        }
-
-        if (!Array.isArray(items) || !items.length) {
-            return res.status(400).json({
-                error: 'Missing items',
-                details: 'Provide at least one product with product_id and quantity'
-            });
-        }
+        if (!user_id) return res.status(400).json({ error: 'Missing user_id' });
+        if (!Array.isArray(items) || !items.length) return res.status(400).json({ error: 'Missing items' });
 
         const sanitizedItems = [];
         const aggregated = {};
@@ -447,32 +364,21 @@ app.post('/checkout', async (req, res) => {
             const { product_id, quantity } = entry || {};
             const productIdNum = Number(product_id);
             const quantityNum = Number(quantity);
-            if (!Number.isInteger(productIdNum) || productIdNum <= 0) {
-                return res.status(400).json({
-                    error: 'Invalid product_id',
-                    details: 'Each item must include a positive integer product_id'
-                });
-            }
-            if (!Number.isInteger(quantityNum) || quantityNum <= 0) {
-                return res.status(400).json({
-                    error: 'Invalid quantity',
-                    details: 'Each item must include a positive integer quantity'
-                });
-            }
+
+            if (!Number.isInteger(productIdNum) || productIdNum <= 0) return res.status(400).json({ error: 'Invalid product_id' });
+            if (!Number.isInteger(quantityNum) || quantityNum <= 0) return res.status(400).json({ error: 'Invalid quantity' });
+
             sanitizedItems.push({ product_id: productIdNum, quantity: quantityNum });
             const key = String(productIdNum);
             aggregated[key] = (aggregated[key] || 0) + quantityNum;
         }
 
         const normalizedUserId = /^\d+$/.test(String(user_id)) ? Number(user_id) : user_id;
-
         const initialStatus = 'processing';
 
         const orderResult = await db.runTransaction(async (tx) => {
             const productEntries = Object.entries(aggregated);
-            const productRefs = productEntries.map(([productId]) =>
-                db.collection('products').doc(String(productId))
-            );
+            const productRefs = productEntries.map(([productId]) => db.collection('products').doc(String(productId)));
             const productSnaps = await Promise.all(productRefs.map((ref) => tx.get(ref)));
 
             const countersRef = db.collection('meta').doc('counters');
@@ -489,25 +395,15 @@ app.post('/checkout', async (req, res) => {
             let computedTotal = 0;
             productSnaps.forEach((snap, index) => {
                 const [productId, requestedQty] = productEntries[index];
-                if (!snap.exists) {
-                    const error = new Error(`Product ${productId} not found`);
-                    error.code = 'PRODUCT_NOT_FOUND';
-                    error.meta = { productId };
-                    throw error;
-                }
+                if (!snap.exists) throw new Error(`Product ${productId} not found`);
+
                 const data = snap.data();
                 const currentStock = Number(data.quantity_in_stock || 0);
-                if (currentStock < requestedQty) {
-                    const error = new Error(`Product ${productId} does not have enough stock`);
-                    error.code = 'OUT_OF_STOCK';
-                    error.meta = { productId, available: currentStock };
-                    throw error;
-                }
+                if (currentStock < requestedQty) throw new Error(`Product ${productId} out of stock`);
+
                 const price = Number(data.price || 0);
                 computedTotal += price * requestedQty;
-                tx.update(productRefs[index], {
-                    quantity_in_stock: FieldValue.increment(-requestedQty)
-                });
+                tx.update(productRefs[index], { quantity_in_stock: FieldValue.increment(-requestedQty) });
             });
 
             const orderRef = db.collection('orders').doc(String(orderId));
@@ -517,78 +413,39 @@ app.post('/checkout', async (req, res) => {
                 status: initialStatus,
                 total_amount: Number(computedTotal.toFixed(2)),
                 items: sanitizedItems,
-                created_at: FieldValue.serverTimestamp()
+                created_at: FieldValue.serverTimestamp(),
+                date: new Date().toISOString()
             };
             tx.set(orderRef, orderPayload);
-
             return { id: orderRef.id, ...orderPayload };
         });
 
-        // Feature 4.2: Send PDF Invoice Email
         try {
-            // Get user email
             const userDoc = await db.collection('users').doc(String(normalizedUserId)).get();
             const userEmail = userDoc.exists ? userDoc.data().email : null;
-            
             if (userEmail && process.env.EMAIL_USER) {
-                // Generate PDF invoice
                 const pdfPath = await generateInvoicePDF(orderResult, userEmail);
-                
-                // Send email with PDF attachment
                 await sendInvoiceEmail(userEmail, orderResult, pdfPath);
-                
-                console.log(`✅ Invoice sent to ${userEmail} for order #${orderResult.order_id}`);
-            } else {
-                console.warn('⚠️ Email not configured or user email not found. Skipping invoice email.');
             }
         } catch (emailErr) {
-            // Don't fail the order if email fails
-            console.error('Invoice email error (non-critical):', emailErr.message);
+            console.error('Invoice email error:', emailErr.message);
         }
-        
-        return res.status(201).json({
-            success: true,
-            message: 'Order created and stock updated',
-            order: orderResult
-        });
+
+        return res.status(201).json({ success: true, message: 'Order created', order: orderResult });
     } catch (err) {
         console.error('Checkout error:', err);
-        if (err.code === 'OUT_OF_STOCK') {
-            return res.status(409).json({
-                error: 'Insufficient stock',
-                details: err.message,
-                product: err.meta
-            });
-        }
-        if (err.code === 'PRODUCT_NOT_FOUND') {
-            return res.status(404).json({
-                error: 'Product not found',
-                details: err.message,
-                product: err.meta
-            });
-        }
-        return res.status(500).json({
-            error: 'Failed to process checkout',
-            details: err.message
-        });
+        return res.status(500).json({ error: 'Checkout failed', details: err.message });
     }
 });
 
 // Delivery queue endpoint
 app.get('/orders/delivery', authenticate, authorize(['product_manager']), async (req, res) => {
     try {
-        const snapshot = await db.collection('orders')
-            .where('status', 'in', ['processing', 'in-transit'])
-            .get();
-
+        const snapshot = await db.collection('orders').where('status', 'in', ['processing', 'in-transit']).get();
         const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         return res.json({ orders });
     } catch (err) {
-        console.error('Delivery queue error:', err);
-        return res.status(500).json({
-            error: 'Failed to load delivery queue',
-            details: err.message
-        });
+        return res.status(500).json({ error: 'Failed to load delivery queue' });
     }
 });
 
@@ -607,9 +464,10 @@ app.get('/roles', async (req, res) => {
         });
         return res.json({ roles: Array.from(set) });
     } catch (err) {
-        return res.status(500).json({ error: 'Failed to list roles', details: err.message });
+        return res.status(500).json({ error: 'Failed to list roles' });
     }
 });
+
 app.get('/users/:id/role', authenticate, authorize(['admin']), async (req, res) => {
     const uid = req.params.id;
     try {
@@ -617,28 +475,25 @@ app.get('/users/:id/role', authenticate, authorize(['admin']), async (req, res) 
         const role = doc.exists ? doc.data().role || null : null;
         return res.json({ uid, role });
     } catch (err) {
-        return res.status(500).json({ error: 'Failed to get user role', details: err.message });
+        return res.status(500).json({ error: 'Failed to get user role' });
     }
 });
+
 app.put('/users/:id/role', authenticate, authorize(['admin']), async (req, res) => {
     const uid = req.params.id;
     const { role } = req.body || {};
-    if (!role) return res.status(400).json({ error: 'role is required in body' });
+    if (!role) return res.status(400).json({ error: 'role is required' });
     try {
         await db.collection('users').doc(uid).set({ role }, { merge: true });
         await admin.auth().setCustomUserClaims(uid, { role });
         return res.json({ uid, role });
     } catch (err) {
-        return res.status(500).json({
-            error: 'Failed to set role', details: err.message
-        });
+        return res.status(500).json({ error: 'Failed to set role' });
     }
 });
 
 // --- ORDER ENDPOINTS ---
 
-// GET /users/:uid/orders
-// Returns sorted order history with product information
 app.get('/users/:uid/orders', authenticate, async (req, res) => {
     const uid = req.params.uid;
     if (req.user.uid !== uid && req.user.role !== 'admin') {
@@ -656,7 +511,6 @@ app.get('/users/:uid/orders', authenticate, async (req, res) => {
                 .orderBy('created_at', 'desc')
                 .get();
         } catch (orderingError) {
-            console.warn('orders created_at index missing, falling back to unsorted query', orderingError.message);
             snapshotOrdered = false;
             ordersSnapshot = await db.collection('orders')
                 .where('user_id', '==', uidQuery)
@@ -672,9 +526,7 @@ app.get('/users/:uid/orders', authenticate, async (req, res) => {
             if (Array.isArray(orderData.items) && orderData.items.length) {
                 items = orderData.items;
             } else {
-                const itemsSnapshot = await db.collection('order_items')
-                    .where('order_id', '==', orderId)
-                    .get();
+                const itemsSnapshot = await db.collection('order_items').where('order_id', '==', orderId).get();
                 items = itemsSnapshot.docs.map(doc => doc.data());
             }
 
@@ -685,12 +537,8 @@ app.get('/users/:uid/orders', authenticate, async (req, res) => {
                 if (productId !== undefined) {
                     try {
                         const productDoc = await db.collection('products').doc(String(productId)).get();
-                        if (productDoc.exists) {
-                            productDetails = productDoc.data();
-                        }
-                    } catch (e) {
-                        console.error('Product fetch error:', e);
-                    }
+                        if (productDoc.exists) productDetails = productDoc.data();
+                    } catch (e) { }
                 }
                 enrichedItems.push({
                     ...productDetails,
@@ -721,63 +569,57 @@ app.get('/users/:uid/orders', authenticate, async (req, res) => {
     }
 });
 
-// GET /users/:uid/products/:productId/eligibility
-// NEW: Checks if a user has ordered a specific product and if it is delivered
+// Check Review Eligibility
 app.get('/users/:uid/products/:productId/eligibility', authenticate, async (req, res) => {
     const { uid, productId } = req.params;
-
-    // Security Check
-    if (req.user.uid !== uid && req.user.role !== 'admin') {
-        return res.status(403).json({ error: "Unauthorized" });
-    }
+    if (req.user.uid !== uid && req.user.role !== 'admin') return res.status(403).json({ error: "Unauthorized" });
 
     const uidQuery = /^\d+$/.test(uid) ? parseInt(uid) : uid;
     const pidQuery = /^\d+$/.test(productId) ? parseInt(productId) : productId;
 
     try {
-        // 1. Get all DELIVERED orders for this user
         const ordersSnapshot = await db.collection('orders')
             .where('user_id', '==', uidQuery)
             .where('status', '==', 'delivered')
             .get();
 
-        if (ordersSnapshot.empty) {
-            return res.json({ canReview: false });
-        }
+        if (ordersSnapshot.empty) return res.json({ canReview: false });
 
         let canReview = false;
-
-        // 2. Check each order's items
         for (const orderDoc of ordersSnapshot.docs) {
             const orderId = orderDoc.data().order_id;
-
-            // Check if this specific product is in this order's items
-            const itemSnapshot = await db.collection('order_items')
-                .where('order_id', '==', orderId)
-                .where('product_id', '==', pidQuery)
-                .limit(1)
-                .get();
-
-            if (!itemSnapshot.empty) {
-                canReview = true;
-                break;
+            // Check direct items array first
+            const orderItems = orderDoc.data().items;
+            if (Array.isArray(orderItems)) {
+                if (orderItems.some(i => i.product_id == pidQuery)) {
+                    canReview = true;
+                    break;
+                }
+            } else {
+                // Fallback to order_items collection
+                const itemSnapshot = await db.collection('order_items')
+                    .where('order_id', '==', orderId)
+                    .where('product_id', '==', pidQuery)
+                    .limit(1)
+                    .get();
+                if (!itemSnapshot.empty) {
+                    canReview = true;
+                    break;
+                }
             }
         }
-
         return res.json({ canReview });
-
     } catch (err) {
         console.error("Eligibility check error:", err);
         return res.status(500).json({ error: err.message });
     }
 });
 
-// --- NEW ENDPOINTS FOR REVIEWS (Fixing Gaps 1, 2, 3) ---
+// --- REVIEWS LOGIC (UPDATED) ---
 
-// 1. GET Public Reviews for a Product
+// 1. GET Public Reviews (Complex Sorting Logic)
 app.get('/products/:id/reviews', async (req, res) => {
     const productId = req.params.id;
-    // Handle integer IDs from seed data if mixed with string IDs
     const pidInt = parseInt(productId);
     const pidQuery = isNaN(pidInt) ? productId : pidInt;
 
@@ -785,16 +627,53 @@ app.get('/products/:id/reviews', async (req, res) => {
         const snapshot = await db.collection('reviews')
             .where('product_id', '==', pidQuery)
             .where('approval_status', '==', 'approved')
-            // .orderBy('timestamp', 'desc') // Uncomment if you create the composite index in Firebase Console
             .get();
 
         const reviews = [];
         snapshot.forEach(doc => reviews.push(doc.data()));
 
-        // Manual sort in case index is missing
-        reviews.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+        // --- SORTING LOGIC ---
+        // 1. Split into WithTimestamp and NoTimestamp
+        const withTime = [];
+        const noTime = [];
 
-        return res.json({ reviews });
+        reviews.forEach(r => {
+            if (r.timestamp) {
+                withTime.push(r);
+            } else {
+                noTime.push(r);
+            }
+        });
+
+        // 2. Sort WithTimestamp: Newest to Oldest
+        withTime.sort((a, b) => {
+            const dateA = new Date(a.timestamp).getTime();
+            const dateB = new Date(b.timestamp).getTime();
+            return dateB - dateA;
+        });
+
+        // 3. Sort NoTimestamp: Comment Length (Short -> Long) THEN Alphabetical
+        noTime.sort((a, b) => {
+            const commentA = (a.comment || "").trim();
+            const commentB = (b.comment || "").trim();
+
+            // Primary: Length
+            if (commentA.length !== commentB.length) {
+                return commentA.length - commentB.length;
+            }
+
+            // Secondary: Alphabetical (Author Name)
+            const nameA = (a.author_name || "").toLowerCase();
+            const nameB = (b.author_name || "").toLowerCase();
+            if (nameA < nameB) return -1;
+            if (nameA > nameB) return 1;
+            return 0;
+        });
+
+        // 4. Merge
+        const finalReviews = [...withTime, ...noTime];
+
+        return res.json({ reviews: finalReviews });
     } catch (err) {
         console.error(err);
         return res.status(500).json({ error: err.message });
@@ -811,13 +690,13 @@ app.get('/my-pending-reviews', authenticate, async (req, res) => {
 
         const reviews = [];
         snapshot.forEach(doc => reviews.push(doc.data()));
-
         return res.json({ reviews });
     } catch (err) {
         return res.status(500).json({ error: err.message });
     }
 });
-// 3. POST Review (Secure Status Logic + User Name)
+
+// 3. POST Review (Updated Auto-Approval Logic)
 app.post('/reviews', authenticate, async (req, res) => {
     const { product_id, rating, comment } = req.body;
 
@@ -826,23 +705,27 @@ app.post('/reviews', authenticate, async (req, res) => {
     }
 
     const userId = req.user.uid;
-
-    // Handle product ID type consistency
     const pidInt = parseInt(product_id);
     const finalProductId = isNaN(pidInt) ? product_id : pidInt;
 
     try {
-        // Fetch user name for display purposes
         const userDoc = await db.collection('users').doc(userId).get();
         const userName = userDoc.exists ? (userDoc.data().name || "Customer") : "Customer";
 
         const cleanComment = comment ? comment.trim() : "";
-        const approvalStatus = 'pending';
+
+        // AUTO-APPROVAL LOGIC: 
+        // If comment is empty/whitespace -> Approved
+        // If comment has text -> Pending
+        let approvalStatus = 'pending';
+        if (cleanComment.length === 0) {
+            approvalStatus = 'approved';
+        }
 
         const newReview = {
-            review_id: Date.now().toString(), // Simple ID generation
+            review_id: Date.now().toString() + Math.floor(Math.random() * 1000),
             user_id: userId,
-            author_name: userName, // Saved for display
+            author_name: userName,
             product_id: finalProductId,
             rating: Number(rating),
             comment: cleanComment,
@@ -850,8 +733,9 @@ app.post('/reviews', authenticate, async (req, res) => {
             approval_status: approvalStatus,
             moderated_by: null,
             approval_reason: null,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString() // EXACTLY TODAY'S DATE ISO
         };
+
         await db.collection('reviews').doc(newReview.review_id).set(newReview);
         return res.json({ success: true, review: newReview });
 
@@ -860,38 +744,31 @@ app.post('/reviews', authenticate, async (req, res) => {
     }
 });
 
-// 3b. GET Pending Reviews for Moderation (Product Manager only)
+// 3b. GET Pending Reviews for Moderation
 app.get('/reviews/moderation', authenticate, authorize(['product_manager']), async (req, res) => {
     try {
-        const snapshot = await db.collection('reviews')
-            .where('approval_status', '==', 'pending')
-            .get();
-
+        const snapshot = await db.collection('reviews').where('approval_status', '==', 'pending').get();
         const reviews = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         return res.json({ reviews });
     } catch (err) {
-        console.error('Failed to load pending reviews:', err);
-        return res.status(500).json({ error: 'Failed to load pending reviews', details: err.message });
+        return res.status(500).json({ error: 'Failed to load pending reviews' });
     }
 });
 
-// 3c. PUT Approve/Reject Review (Product Manager only)
+// 3c. PUT Approve/Reject Review
 app.put('/reviews/:id/approve', authenticate, authorize(['product_manager']), async (req, res) => {
     const reviewId = req.params.id;
     const { decision, reason } = req.body || {};
     const normalizedDecision = (decision || 'approved').toLowerCase();
 
     if (!['approved', 'rejected'].includes(normalizedDecision)) {
-        return res.status(400).json({ error: 'Invalid decision', details: 'Use approved or rejected' });
+        return res.status(400).json({ error: 'Invalid decision' });
     }
 
     try {
         const reviewRef = db.collection('reviews').doc(reviewId);
         const reviewDoc = await reviewRef.get();
-
-        if (!reviewDoc.exists) {
-            return res.status(404).json({ error: 'Review not found' });
-        }
+        if (!reviewDoc.exists) return res.status(404).json({ error: 'Review not found' });
 
         const updatePayload = {
             approval_status: normalizedDecision,
@@ -905,24 +782,18 @@ app.put('/reviews/:id/approve', authenticate, authorize(['product_manager']), as
         const updatedDoc = await reviewRef.get();
         return res.json({ success: true, review: updatedDoc.data() });
     } catch (err) {
-        console.error('Failed to update review approval:', err);
-        return res.status(500).json({ error: 'Failed to update review approval', details: err.message });
+        return res.status(500).json({ error: 'Failed to update review approval' });
     }
 });
 
-// 4. DELETE Review (Owner Only)
+// 4. DELETE Review
 app.delete('/reviews/:id', authenticate, async (req, res) => {
     const reviewId = req.params.id;
     try {
         const docRef = db.collection('reviews').doc(reviewId);
         const doc = await docRef.get();
-
         if (!doc.exists) return res.status(404).json({ error: "Review not found" });
-
-        // Security Check: Only owner can delete
-        if (doc.data().user_id !== req.user.uid) {
-            return res.status(403).json({ error: "Unauthorized" });
-        }
+        if (doc.data().user_id !== req.user.uid) return res.status(403).json({ error: "Unauthorized" });
 
         await docRef.delete();
         return res.json({ success: true });
@@ -931,90 +802,45 @@ app.delete('/reviews/:id', authenticate, async (req, res) => {
     }
 });
 
-// ============================================
-// CART ENDPOINTS (Feature 4.1.2 by İrem Ulusal)
-// ============================================
-
-// POST /users/:uid/cart - Save cart to user account
+// Cart Endpoints
 app.post('/users/:uid/cart', authenticate, async (req, res) => {
     const uid = req.params.uid;
     const { items } = req.body;
-    
-    // Security check
-    if (req.user.uid !== uid) {
-        return res.status(403).json({ error: 'Unauthorized' });
-    }
-    
+    if (req.user.uid !== uid) return res.status(403).json({ error: 'Unauthorized' });
     try {
-        await db.collection('users').doc(uid).set({
-            saved_cart: items || []
-        }, { merge: true });
-        
-        return res.json({
-            success: true,
-            message: 'Cart saved successfully'
-        });
+        await db.collection('users').doc(uid).set({ saved_cart: items || [] }, { merge: true });
+        return res.json({ success: true, message: 'Cart saved successfully' });
     } catch (err) {
-        console.error('Save cart error:', err);
-        return res.status(500).json({
-            error: 'Failed to save cart',
-            details: err.message
-        });
+        return res.status(500).json({ error: 'Failed to save cart' });
     }
 });
 
-// GET /users/:uid/cart - Get saved cart from user account
 app.get('/users/:uid/cart', authenticate, async (req, res) => {
     const uid = req.params.uid;
-    
-    // Security check
-    if (req.user.uid !== uid) {
-        return res.status(403).json({ error: 'Unauthorized' });
-    }
-    
+    if (req.user.uid !== uid) return res.status(403).json({ error: 'Unauthorized' });
     try {
         const userDoc = await db.collection('users').doc(uid).get();
-        
-        if (!userDoc.exists) {
-            return res.json({ cart: [] });
-        }
-        
+        if (!userDoc.exists) return res.json({ cart: [] });
         const cart = userDoc.data().saved_cart || [];
         return res.json({ cart });
     } catch (err) {
-        console.error('Get cart error:', err);
-        return res.status(500).json({
-            error: 'Failed to get cart',
-            details: err.message
-        });
+        return res.status(500).json({ error: 'Failed to get cart' });
     }
 });
 
-// POST /logout - Save cart and logout (Feature 4.1.2)
 app.post('/logout', authenticate, async (req, res) => {
     const { cart } = req.body;
     const uid = req.user.uid;
-    
     try {
-        // Save cart to user account before logout
         if (cart && Array.isArray(cart)) {
-            await db.collection('users').doc(uid).set({
-                saved_cart: cart
-            }, { merge: true });
+            await db.collection('users').doc(uid).set({ saved_cart: cart }, { merge: true });
         }
-        
-        return res.json({
-            success: true,
-            message: 'Cart saved and logged out successfully'
-        });
+        return res.json({ success: true, message: 'Logged out' });
     } catch (err) {
-        console.error('Logout error:', err);
-        return res.status(500).json({
-            error: 'Failed to logout',
-            details: err.message
-        });
+        return res.status(500).json({ error: 'Failed to logout' });
     }
 });
+
 
 // ============================================
 // AUTH ROUTES (Login-Sign Up by İrem Ulusal)
@@ -1025,3 +851,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server listening on http://localhost:${PORT}`);
 });
+
