@@ -10,6 +10,7 @@ import 'signup_screen.dart';
 import 'basket_page.dart';
 import 'order_history_page.dart'; // Order History
 import 'product_detail.dart';
+import 'product_manager_page.dart';
 // Product Detail Page
 
 // ==========================================
@@ -291,6 +292,8 @@ class _StoreLayoutState extends State<StoreLayout> {
                   child: const Text('Sign Up'),
                 ),
               ] else ...[
+
+                //ADDED PM
                 // 4. Profile Picture & Dropdown
                 PopupMenuButton<String>(
                   icon: CircleAvatar(
@@ -305,6 +308,13 @@ class _StoreLayoutState extends State<StoreLayout> {
                           builder: (context) => OrderHistoryPage(),
                         ),
                       );
+                    } else if (value == 'delivery') {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ProductManagerPage(),
+                        ),
+                      );
                     } else if (value == 'info') {
                       // Navigate to Info (Placeholder)
                     } else if (value == 'logout') {
@@ -316,25 +326,33 @@ class _StoreLayoutState extends State<StoreLayout> {
                       );
                     }
                   },
-                  itemBuilder: (BuildContext context) =>
-                      <PopupMenuEntry<String>>[
+                  itemBuilder: (BuildContext context) {
+                    final role = AuthService().userRole;
+                    return <PopupMenuEntry<String>>[
+                      const PopupMenuItem<String>(
+                        value: 'info',
+                        child: Text('My Information'),
+                      ),
+                      const PopupMenuItem<String>(
+                        value: 'orders',
+                        child: Text('My Orders'),
+                      ),
+                      // Show Delivery Queue only for product managers
+                      if (role == 'product_manager')
                         const PopupMenuItem<String>(
-                          value: 'info',
-                          child: Text('My Information'),
+                          value: 'delivery',
+                          child: Text('Delivery Queue'),
                         ),
-                        const PopupMenuItem<String>(
-                          value: 'orders',
-                          child: Text('My Orders'),
+                      const PopupMenuDivider(),
+                      const PopupMenuItem<String>(
+                        value: 'logout',
+                        child: Text(
+                          'Log Out',
+                          style: TextStyle(color: Colors.red),
                         ),
-                        const PopupMenuDivider(),
-                        const PopupMenuItem<String>(
-                          value: 'logout',
-                          child: Text(
-                            'Log Out',
-                            style: TextStyle(color: Colors.red),
-                          ),
-                        ),
-                      ],
+                      ),
+                    ];
+                  },
                 ),
               ],
             ],
