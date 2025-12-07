@@ -15,6 +15,7 @@ class AuthService extends ChangeNotifier {
 
   bool get isLoggedIn => _currentUser != null;
   Map<String, dynamic>? get currentUser => _currentUser;
+  String get userRole => _currentUser?['role'] ?? 'customer';
 
   // Login using the Backend API (Fixes 4.0.2)
   Future<bool> login(String email, String password) async {
@@ -35,6 +36,14 @@ class AuthService extends ChangeNotifier {
           _currentUser = data['user'];
           final userKey = _resolveUserKey(_currentUser);
           
+          // SAVE TOKEN TO SHARED PREFERENCES ⬇️
+          if (userKey != null) {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('auth_token', userKey);
+            await prefs.setString('user_id', userKey);
+            _token = userKey;
+          }
+          
           // Load user's saved cart
           await cartService.loadCartForUser(userKey);
           
@@ -46,8 +55,6 @@ class AuthService extends ChangeNotifier {
             await prefs.remove('cart_items_guest');
           }
           
-          // If your backend returns a token, store it here.
-          // For now, we assume simple session based on user object existence.
           notifyListeners();
           return true;
         }
@@ -63,11 +70,15 @@ class AuthService extends ChangeNotifier {
     _currentUser = null;
     _token = null;
 
+    // CLEAR TOKEN FROM SHARED PREFERENCES ⬇️
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('auth_token');
+    await prefs.remove('user_id');
+
     // 1. Switch context to Guest (unlogged)
     await CartService().loadCartForUser(null);
 
     // 2. Clear the guest cart immediately to ensure a fresh start
-    // This wipes any previous guest data, ensuring the basket is empty.
     await CartService().clearCart();
 
     notifyListeners();
