@@ -476,6 +476,38 @@ app.get('/orders/delivery', authenticate, authorize(['product_manager']), async 
     }
 });
 
+// Update Order Status (Product Manager Only)
+//ADDED STATUS FOR PM 
+app.put('/orders/:orderId/status', authenticate, authorize(['product_manager']), async (req, res) => {
+    const { orderId } = req.params;
+    const { status } = req.body;
+
+    const validStatuses = ['processing', 'in-transit', 'delivered', 'cancelled'];
+    if (!status || !validStatuses.includes(status)) {
+        return res.status(400).json({ error: 'Invalid status. Valid values: processing, in-transit, delivered, cancelled' });
+    }
+
+    try {
+        const orderRef = db.collection('orders').doc(orderId);
+        const orderDoc = await orderRef.get();
+
+        if (!orderDoc.exists) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+
+        await orderRef.update({
+            status: status,
+            updated_at: FieldValue.serverTimestamp()
+        });
+
+        const updatedDoc = await orderRef.get();
+        return res.json({ success: true, order: updatedDoc.data() });
+    } catch (err) {
+        console.error('Update order status error:', err);
+        return res.status(500).json({ error: 'Failed to update order status' });
+    }
+});
+
 app.get('/roles', async (req, res) => {
     try {
         const rolesCol = await db.collection('roles').get();
