@@ -1,8 +1,9 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // <--- ADDED THIS IMPORT
 import 'package:firebase_auth/firebase_auth.dart';
 import 'signup_screen.dart';
-import '../services/auth_service.dart'; // Import the new AuthService
+import '../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   @override
@@ -19,13 +20,14 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // Trigger autofill save
+    TextInput.finishAutofillContext();
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
-    // Fix 4.0.2: Use AuthService (Backend API) instead of just Firebase
-    // This allows logging in with seeded data like "ali@example.com" / "hashed_pass_1"
     bool success = await AuthService().login(
       _emailController.text.trim(),
       _passwordController.text,
@@ -33,7 +35,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (success) {
       if (!mounted) return;
-      // Return to previous screen
       Navigator.pop(context, true);
     } else {
       setState(() {
@@ -76,100 +77,106 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               child: Form(
                 key: _formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'CS308 STORE',
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFFFF7733),
-                      ),
-                    ),
-                    SizedBox(height: 32),
-
-                    TextFormField(
-                      controller: _emailController,
-                      decoration: InputDecoration(
-                        labelText: 'Email',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.email),
-                      ),
-                      validator: (val) => val!.isEmpty ? 'Enter email' : null,
-                    ),
-                    SizedBox(height: 16),
-
-                    TextFormField(
-                      controller: _passwordController,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.lock),
-                      ),
-                      obscureText: true,
-                      validator: (val) =>
-                          val!.isEmpty ? 'Enter password' : null,
-                    ),
-                    SizedBox(height: 24),
-
-                    if (_errorMessage != null)
-                      Container(
-                        padding: EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.red[50],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          _errorMessage!,
-                          style: TextStyle(color: Colors.red),
-                          textAlign: TextAlign.center,
+                child: AutofillGroup(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'CS308 STORE',
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFFFF7733),
                         ),
                       ),
-                    if (_errorMessage != null) SizedBox(height: 16),
+                      SizedBox(height: 32),
 
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : _login,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Color(0xFFFF7733),
-                          foregroundColor: Colors.white,
-                        ),
-                        child: _isLoading
-                            ? CircularProgressIndicator(color: Colors.white)
-                            : Text('Login', style: TextStyle(fontSize: 16)),
-                      ),
-                    ),
-                    SizedBox(height: 16),
-
-                    // Fix 4.0.3: Updated label text
-                    RichText(
-                      text: TextSpan(
-                        text: 'Dont have an account yet? ',
-                        style: TextStyle(color: Colors.black),
-                        children: [
-                          TextSpan(
-                            text: 'Sign up',
-                            style: TextStyle(
-                              color: Colors.blue,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            recognizer: TapGestureRecognizer()
-                              ..onTap = () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => SignupScreen(),
-                                  ),
-                                );
-                              },
-                          ),
+                      TextFormField(
+                        controller: _emailController,
+                        autofillHints: const [
+                          AutofillHints.email,
+                          AutofillHints.username,
                         ],
+                        decoration: InputDecoration(
+                          labelText: 'Email',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.email),
+                        ),
+                        validator: (val) => val!.isEmpty ? 'Enter email' : null,
                       ),
-                    ),
-                  ],
+                      SizedBox(height: 16),
+
+                      TextFormField(
+                        controller: _passwordController,
+                        autofillHints: const [AutofillHints.password],
+                        decoration: InputDecoration(
+                          labelText: 'Password',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.lock),
+                        ),
+                        obscureText: true,
+                        validator: (val) =>
+                            val!.isEmpty ? 'Enter password' : null,
+                      ),
+                      SizedBox(height: 24),
+
+                      if (_errorMessage != null)
+                        Container(
+                          padding: EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.red[50],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            _errorMessage!,
+                            style: TextStyle(color: Colors.red),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      if (_errorMessage != null) SizedBox(height: 16),
+
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : _login,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Color(0xFFFF7733),
+                            foregroundColor: Colors.white,
+                          ),
+                          child: _isLoading
+                              ? CircularProgressIndicator(color: Colors.white)
+                              : Text('Login', style: TextStyle(fontSize: 16)),
+                        ),
+                      ),
+                      SizedBox(height: 16),
+
+                      RichText(
+                        text: TextSpan(
+                          text: 'Dont have an account yet? ',
+                          style: TextStyle(color: Colors.black),
+                          children: [
+                            TextSpan(
+                              text: 'Sign up',
+                              style: TextStyle(
+                                color: Colors.blue,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              recognizer: TapGestureRecognizer()
+                                ..onTap = () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => SignupScreen(),
+                                    ),
+                                  );
+                                },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

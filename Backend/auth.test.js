@@ -229,6 +229,111 @@ async function testLoginWrongPassword() {
   expect(response.body.message).toBe('Email veya şifre hatalı');
 }
 
+/**
+ * Test Function 5: Verify user exists in database after registration
+ */
+async function testRegisterDatabaseCheck() {
+  await request(app)
+    .post('/auth/register')
+    .send({
+      email: 'dbcheck@example.com',
+      password: 'password123',
+      name: 'DB Check User',
+      address: 'Istanbul'
+    });
+
+  // Manually check the mock database
+  let userFound = false;
+  for (let user of mockFirestore.users.values()) {
+    if (user.email === 'dbcheck@example.com') {
+      userFound = true;
+      break;
+    }
+  }
+  expect(userFound).toBe(true);
+}
+
+/**
+ * Test Function 6: Verify signup log is created
+ */
+async function testSignupLogCreation() {
+  await request(app)
+    .post('/auth/register')
+    .send({
+      email: 'logcheck@example.com',
+      password: 'password123',
+      name: 'Log User',
+      address: 'Istanbul'
+    });
+
+  // Check signup_logs collection in mock db
+  const log = mockFirestore.signup_logs.find(l => l.email === 'logcheck@example.com');
+  expect(log).toBeDefined();
+  expect(log.method).toBe('email_password');
+}
+
+/**
+ * Test Function 7: Verify default role assignment
+ */
+async function testDefaultRoleAssignment() {
+  const response = await request(app)
+    .post('/auth/register')
+    .send({
+      email: 'rolecheck@example.com',
+      password: 'password123',
+      name: 'Role User',
+      address: 'Istanbul'
+    });
+
+  expect(response.body.data.role).toBe('customer');
+  
+  // Verify in DB as well
+  const user = Array.from(mockFirestore.users.values()).find(u => u.email === 'rolecheck@example.com');
+  expect(user.role).toBe('customer');
+}
+
+/**
+ * Test Function 8: Verify login log is created upon success
+ */
+async function testLoginLogCreation() {
+  // Register
+  await request(app)
+    .post('/auth/register')
+    .send({
+      email: 'loginlog@example.com',
+      password: 'password123',
+      name: 'Login Log User'
+    });
+
+  // Login
+  await request(app)
+    .post('/auth/login')
+    .send({
+      email: 'loginlog@example.com',
+      password: 'password123'
+    });
+
+  // Check login_logs
+  const log = mockFirestore.login_logs.find(l => l.email === 'loginlog@example.com');
+  expect(log).toBeDefined();
+  expect(log.success).toBe(true);
+}
+
+/**
+ * Test Function 9: Login failure for non-existent user
+ */
+async function testNonExistentUserLogin() {
+  const response = await request(app)
+    .post('/auth/login')
+    .send({
+      email: 'nobody@example.com',
+      password: 'anypassword'
+    });
+
+  expect(response.statusCode).toBe(404);
+  expect(response.body.success).toBe(false);
+}
+
 // ============================================
 // TEST SUITE
 // ============================================
@@ -246,11 +351,16 @@ describe('Authentication API Tests - Real Endpoints', () => {
   describe('POST /auth/register - Sign Up Tests', () => {
     test('Test 1: Should successfully register a new user with valid data', testRegisterSuccess);
     test('Test 2: Should fail registration with duplicate email', testRegisterDuplicate);
+    test('Test 5: Should verify user exists in database', testRegisterDatabaseCheck);
+    test('Test 6: Should create a signup log entry', testSignupLogCreation);
+    test('Test 7: Should assign default role "customer"', testDefaultRoleAssignment);
   });
 
   describe('POST /auth/login - Login Tests', () => {
     test('Test 3: Should successfully login with correct credentials', testLoginSuccess);
     test('Test 4: Should fail login with incorrect password', testLoginWrongPassword);
+    test('Test 8: Should create a login log entry on success', testLoginLogCreation);
+    test('Test 9: Should fail login for non-existent user', testNonExistentUserLogin);
   });
 });
 

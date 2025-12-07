@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Needed for direct ID access check if using Firebase
+import 'package:firebase_auth/firebase_auth.dart';
 import '../services/cart_service.dart';
 import '../services/auth_service.dart';
 import '../services/api_service.dart';
@@ -18,7 +18,6 @@ class ProductDetail extends StatefulWidget {
 class _ProductDetailState extends State<ProductDetail> {
   int _currentImageIndex = 0;
   final List<String> _productImages = ['Image 1', 'Image 2', 'Image 3'];
-
   int _selectedRating = 0;
   final TextEditingController _commentController = TextEditingController();
 
@@ -26,14 +25,13 @@ class _ProductDetailState extends State<ProductDetail> {
   List<dynamic> _publicReviews = [];
   Map<String, dynamic>? _myPendingReview;
   bool _isLoadingReviews = true;
-  bool _canReview = false; // Stores eligibility result from backend
+  bool _canReview = false;
 
   @override
   void initState() {
     super.initState();
     _loadReviews();
     _commentController.addListener(() {
-      // Force rebuild to update warning color if text changes
       setState(() {});
     });
   }
@@ -48,7 +46,7 @@ class _ProductDetailState extends State<ProductDetail> {
     final api = ApiService();
     final productId = widget.product['product_id'] ?? widget.product['id'];
 
-    // 1. Fetch Public Reviews
+    // 1. Fetch Public Reviews (Sorted by backend)
     final public = await api.getPublicReviews(productId);
 
     // 2. Fetch Pending (if logged in)
@@ -60,7 +58,6 @@ class _ProductDetailState extends State<ProductDetail> {
 
       // 3. Check Eligibility
       String? uid;
-      // Get correct UID (Firebase or Seeded)
       if (FirebaseAuth.instance.currentUser != null) {
         uid = FirebaseAuth.instance.currentUser!.uid;
       } else {
@@ -73,11 +70,6 @@ class _ProductDetailState extends State<ProductDetail> {
         eligible = await api.checkReviewEligibility(uid, productId);
       }
     } else {
-      // If not logged in, we set eligible to true purely for UI state (button takes to login),
-      // or false to hide things.
-      // Requirement: "logged out state comment algorithm will run as usual"
-      // Usually this means button is enabled but redirects.
-      // However, for the warning text logic, we only show warning if logged in AND not eligible.
       eligible = false;
     }
 
@@ -149,7 +141,6 @@ class _ProductDetailState extends State<ProductDetail> {
               const SizedBox(height: 16),
               _buildCommentBox(),
 
-              // WARNING NOTE LOGIC
               if (AuthService().isLoggedIn && !_canReview) ...[
                 const SizedBox(height: 8),
                 Text(
@@ -158,7 +149,6 @@ class _ProductDetailState extends State<ProductDetail> {
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                     fontStyle: FontStyle.italic,
-                    // Red if user typed/rated, Orange otherwise
                     color:
                         (_commentController.text.isNotEmpty ||
                             _selectedRating > 0)
@@ -208,16 +198,13 @@ class _ProductDetailState extends State<ProductDetail> {
 
   Widget _buildSendButton(dynamic productId) {
     bool isLoggedIn = AuthService().isLoggedIn;
-
-    // If Logged OUT: Button enabled (to redirect).
-    // If Logged IN: Button disabled if Rating is 0 OR Not Eligible.
     bool isDisabled = false;
+
     if (isLoggedIn) {
       if (_selectedRating == 0 || !_canReview) {
         isDisabled = true;
       }
     } else {
-      // Logged out: Disable if rating is 0 (standard behavior)
       if (_selectedRating == 0) isDisabled = true;
     }
 
@@ -232,14 +219,11 @@ class _ProductDetailState extends State<ProductDetail> {
                     context,
                     MaterialPageRoute(builder: (context) => LoginScreen()),
                   );
-                  // Refresh upon return
                   _loadReviews();
                   setState(() {});
                 } else {
-                  // Double check eligibility before sending (though backend enforces it too)
                   if (!_canReview) return;
 
-                  // Post to Backend
                   bool success = await ApiService().postReview(
                     productId,
                     _selectedRating,
@@ -252,6 +236,7 @@ class _ProductDetailState extends State<ProductDetail> {
                     );
                     _commentController.clear();
                     setState(() => _selectedRating = 0);
+                    // Refresh reviews to show new timestamped review
                     _loadReviews();
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -317,6 +302,21 @@ class _ProductDetailState extends State<ProductDetail> {
           const SizedBox(height: 8),
           Text(review['comment'] ?? ''),
           const SizedBox(height: 8),
+
+          // TIMESTAMP FOR PENDING REVIEW
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              _formatReviewDate(review['timestamp']),
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 4),
           const Text(
             "Your comment is waiting for approval",
             style: TextStyle(
@@ -336,6 +336,7 @@ class _ProductDetailState extends State<ProductDetail> {
 
   Widget _buildReviewCard(Map<String, dynamic> r) {
     String name = r['author_name'] ?? r['user_id']?.toString() ?? 'Customer';
+    String formattedDate = _formatReviewDate(r['timestamp']);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -344,23 +345,66 @@ class _ProductDetailState extends State<ProductDetail> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(width: 10),
-          ...List.generate(
-            5,
-            (i) => Icon(
-              i < (r['rating'] ?? 0) ? Icons.star : Icons.star_border,
-              size: 16,
-              color: Colors.orange,
+          // Header Row
+          Row(
+            children: [
+              Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(width: 10),
+              ...List.generate(
+                5,
+                (i) => Icon(
+                  i < (r['rating'] ?? 0) ? Icons.star : Icons.star_border,
+                  size: 16,
+                  color: Colors.orange,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // Comment Text
+          if (r['comment'] != null && r['comment'].toString().trim().isNotEmpty)
+            Text(r['comment']),
+
+          const SizedBox(height: 8),
+
+          // Timestamp at the end
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              formattedDate,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+                fontStyle: FontStyle.italic,
+              ),
             ),
           ),
-          const SizedBox(width: 10),
-          Expanded(child: Text(r['comment'] ?? '')),
         ],
       ),
     );
+  }
+
+  // Format Helper: "Date: 05-12-2025 21:01" or "Date: -"
+  String _formatReviewDate(String? isoString) {
+    if (isoString == null || isoString.isEmpty) {
+      return "Date: -";
+    }
+    try {
+      final dt = DateTime.parse(isoString).toLocal();
+      final day = dt.day.toString().padLeft(2, '0');
+      final month = dt.month.toString().padLeft(2, '0');
+      final year = dt.year;
+      final hour = dt.hour.toString().padLeft(2, '0');
+      final minute = dt.minute.toString().padLeft(2, '0');
+
+      return "Date: $day-$month-$year $hour:$minute";
+    } catch (e) {
+      return "Date: -";
+    }
   }
 
   Widget _buildImageCarousel(String? url, String title, bool isOutOfStock) {
@@ -505,7 +549,6 @@ class _ProductDetailState extends State<ProductDetail> {
           ),
           onPressed: () {
             setState(() {
-              // Toggle logic: If clicking the same star count, reset to 0
               if (_selectedRating == index + 1) {
                 _selectedRating = 0;
               } else {
