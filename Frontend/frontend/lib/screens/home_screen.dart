@@ -1153,6 +1153,19 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Product ID
+                    if (product['product_id'] != null || product['id'] != null)
+                      Text(
+                        'ID: ${product['product_id'] ?? product['id']}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    const SizedBox(height: 4),
+                    
+                    // Product Name
                     Text(
                       product['name'] ?? 'Product',
                       style: const TextStyle(
@@ -1162,9 +1175,89 @@ class _HomeScreenState extends State<HomeScreen> {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 8),
-
-                    // REMOVED RATING ROW HERE
+                    const SizedBox(height: 6),
+                    
+                    // Model
+                    if (product['model'] != null && product['model'].toString().isNotEmpty)
+                      Text(
+                        'Model: ${product['model']}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                    
+                    // Serial Number
+                    if (product['serial_number'] != null && product['serial_number'].toString().isNotEmpty)
+                      Text(
+                        'Serial: ${product['serial_number']}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    
+                    const SizedBox(height: 6),
+                    
+                    // Category
+                    Text(
+                      getCategoryNames(product),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: const Color(0xFFFF7733),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 6),
+                    
+                    // Price
+                    Text(
+                      '${product['price'] ?? 0} ₺',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFFF7733),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 4),
+                    
+                    // Stock
+                    Text(
+                      'Stock: ${product['quantity_in_stock'] ?? 0}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: (product['quantity_in_stock'] ?? 0) > 0 
+                            ? Colors.green[700] 
+                            : Colors.red[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    
+                    // Warranty Status
+                    if (product['warranty_status'] != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.verified,
+                              size: 12,
+                              color: Colors.green[700],
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Warranty: ${product['warranty_status']}',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.green[700],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    
                     const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
