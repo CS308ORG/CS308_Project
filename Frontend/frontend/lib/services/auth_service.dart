@@ -1,9 +1,9 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'api_service.dart';
 import 'cart_service.dart';
+import 'api_service.dart';
 
 class AuthService extends ChangeNotifier {
   static final AuthService _instance = AuthService._internal();
@@ -16,6 +16,9 @@ class AuthService extends ChangeNotifier {
   bool get isLoggedIn => _currentUser != null;
   Map<String, dynamic>? get currentUser => _currentUser;
   String get userRole => _currentUser?['role'] ?? 'customer';
+  
+  // ✅ ADD THIS PUBLIC GETTER
+  String? get token => _token;
 
   // Login using the Backend API (Fixes 4.0.2)
   Future<bool> login(String email, String password) async {
