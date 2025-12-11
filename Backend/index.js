@@ -466,16 +466,43 @@ app.post('/checkout', async (req, res) => {
 });
 
 // Delivery queue endpoint
+// Delivery queue endpoint - UPDATED to include delivered orders
+// ========================================
+// BACKEND UPDATE FOR index.js
+// ========================================
+// Replace the existing delivery queue endpoint with this updated version
+
+// Delivery queue endpoint - UPDATED to include delivered orders
 app.get('/orders/delivery', authenticate, authorize(['product_manager']), async (req, res) => {
     try {
-        const snapshot = await db.collection('orders').where('status', 'in', ['processing', 'in-transit']).get();
+        // Now fetches processing, in-transit, AND delivered orders
+        const snapshot = await db.collection('orders')
+            .where('status', 'in', ['processing', 'in-transit', 'delivered'])
+            .get();
+        
         const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        // Sort orders by status priority (processing first, then in-transit, then delivered)
+        orders.sort((a, b) => {
+            const statusPriority = {
+                'processing': 1,
+                'in-transit': 2,
+                'delivered': 3
+            };
+            return (statusPriority[a.status] || 999) - (statusPriority[b.status] || 999);
+        });
+        
         return res.json({ orders });
     } catch (err) {
+        console.error('Delivery queue error:', err);
         return res.status(500).json({ error: 'Failed to load delivery queue' });
     }
 });
 
+// ========================================
+// NOTE: The Update Order Status endpoint already supports 'delivered' status
+// No changes needed there - it's already in place!
+// ========================================
 // Update Order Status (Product Manager Only)
 //ADDED STATUS FOR PM 
 app.put('/orders/:orderId/status', authenticate, authorize(['product_manager']), async (req, res) => {
