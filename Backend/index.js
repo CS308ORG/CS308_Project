@@ -252,7 +252,73 @@ app.get('/collections/:name', async (req, res) => {
         }
 
         const snapshot = await query.get();
-        const documents = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        let documents = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        
+        // If products collection, add average rating for each product
+        if (name === 'products') {
+            const productIds = documents.map(doc => {
+                const pid = doc.product_id ?? doc.id;
+                return typeof pid === 'number' ? pid : parseInt(pid);
+            }).filter(pid => !isNaN(pid));
+            
+            // Fetch all reviews for these products in batch
+            const reviewsPromises = productIds.map(async (pid) => {
+                try {
+                    const reviewsSnapshot = await db.collection('reviews')
+                        .where('product_id', '==', pid)
+                        .where('approval_status', '==', 'approved')
+                        .get();
+                    
+                    const reviews = [];
+                    reviewsSnapshot.forEach(doc => reviews.push(doc.data()));
+                    
+                    if (reviews.length === 0) {
+                        return { productId: pid, averageRating: 0, reviewCount: 0 };
+                    }
+                    
+                    const totalRating = reviews.reduce((sum, r) => sum + (r.rating || 0), 0);
+                    const averageRating = totalRating / reviews.length;
+                    
+                    return {
+                        productId: pid,
+                        averageRating: Math.round(averageRating * 10) / 10, // Round to 1 decimal
+                        reviewCount: reviews.length
+                    };
+                } catch (e) {
+                    return { productId: pid, averageRating: 0, reviewCount: 0 };
+                }
+            });
+            
+            const ratingsData = await Promise.all(reviewsPromises);
+            const ratingsMap = {};
+            ratingsData.forEach(r => {
+                ratingsMap[r.productId] = { averageRating: r.averageRating, reviewCount: r.reviewCount };
+            });
+            
+            // Add rating data to products
+            documents = documents.map(doc => {
+                const pid = doc.product_id ?? doc.id;
+                const pidNum = typeof pid === 'number' ? pid : parseInt(pid);
+                const ratingInfo = ratingsMap[pidNum] || { averageRating: 0, reviewCount: 0 };
+                
+                // Calculate popularity_score if not exists
+                // Popularity = (average_rating * review_count) / 10
+                // This gives higher score to products with both high ratings and many reviews
+                const existingPopularity = doc.popularity_score ?? 0;
+                const calculatedPopularity = ratingInfo.reviewCount > 0
+                    ? (ratingInfo.averageRating * ratingInfo.reviewCount) / 10
+                    : 0;
+                const popularityScore = existingPopularity > 0 ? existingPopularity : calculatedPopularity;
+                
+                return {
+                    ...doc,
+                    average_rating: ratingInfo.averageRating,
+                    review_count: ratingInfo.reviewCount,
+                    popularity_score: popularityScore
+                };
+            });
+        }
+        
         return res.json({ collection: name, count: documents.length, documents });
     } catch (err) {
         console.error(`Failed to read collection ${name}:`, err);
@@ -658,10 +724,17 @@ app.get('/users/:uid/orders', authenticate, async (req, res) => {
 // Check Review Eligibility
 app.get('/users/:uid/products/:productId/eligibility', authenticate, async (req, res) => {
     const { uid, productId } = req.params;
-    if (String(req.user.uid) !== String(uid) && req.user.role !== 'admin') return res.status(403).json({ error: "Unauthorized" });
+    // Allow access if: user checking their own eligibility, admin, or product_manager (for moderation)
+    if (String(req.user.uid) !== String(uid) && req.user.role !== 'admin' && req.user.role !== 'product_manager') {
+        return res.status(403).json({ error: "Unauthorized" });
+    }
 
     const uidQuery = /^\d+$/.test(uid) ? parseInt(uid) : uid;
-    const pidQuery = /^\d+$/.test(productId) ? parseInt(productId) : productId;
+    // Normalize productId to both string and number for comparison
+    const pidString = String(productId);
+    const pidNumber = /^\d+$/.test(pidString) ? parseInt(pidString) : null;
+
+    console.log(`[Eligibility Check] User: ${uid} (${uidQuery}), Product: ${productId} (string: ${pidString}, number: ${pidNumber})`);
 
     try {
         const ordersSnapshot = await db.collection('orders')
@@ -669,31 +742,79 @@ app.get('/users/:uid/products/:productId/eligibility', authenticate, async (req,
             .where('status', '==', 'delivered')
             .get();
 
-        if (ordersSnapshot.empty) return res.json({ canReview: false });
+        console.log(`[Eligibility Check] Found ${ordersSnapshot.size} delivered orders for user ${uidQuery}`);
+
+        if (ordersSnapshot.empty) {
+            console.log(`[Eligibility Check] No delivered orders found for user ${uidQuery}`);
+            return res.json({ canReview: false });
+        }
 
         let canReview = false;
         for (const orderDoc of ordersSnapshot.docs) {
-            const orderId = orderDoc.data().order_id;
+            const orderData = orderDoc.data();
+            const orderId = orderData.order_id;
+            const orderStatus = orderData.status;
+            
+            console.log(`[Eligibility Check] Checking order ${orderId} with status: ${orderStatus}`);
+            
             // Check direct items array first
-            const orderItems = orderDoc.data().items;
-            if (Array.isArray(orderItems)) {
-                if (orderItems.some(i => i.product_id == pidQuery)) {
+            const orderItems = orderData.items;
+            console.log(`[Eligibility Check] Order ${orderId} has ${Array.isArray(orderItems) ? orderItems.length : 0} items`);
+            
+            if (Array.isArray(orderItems) && orderItems.length > 0) {
+                // Check both string and number comparison to handle type mismatches
+                const found = orderItems.some(i => {
+                    const itemPid = i.product_id;
+                    const itemPidStr = String(itemPid);
+                    const itemPidNum = Number(itemPid);
+                    
+                    const matches = String(itemPid) === pidString || 
+                           (pidNumber !== null && Number(itemPid) === pidNumber) ||
+                           itemPid == pidString || 
+                           (pidNumber !== null && itemPid == pidNumber);
+                    
+                    if (matches) {
+                        console.log(`[Eligibility Check] Match found! Order ${orderId}, item product_id: ${itemPid} (type: ${typeof itemPid}) matches ${productId}`);
+                    }
+                    
+                    return matches;
+                });
+                
+                if (found) {
                     canReview = true;
+                    console.log(`[Eligibility Check] User CAN review - found product in order ${orderId}`);
                     break;
+                } else {
+                    console.log(`[Eligibility Check] Order ${orderId} items:`, orderItems.map(i => ({ pid: i.product_id, type: typeof i.product_id })));
                 }
             } else {
-                // Fallback to order_items collection
-                const itemSnapshot = await db.collection('order_items')
-                    .where('order_id', '==', orderId)
-                    .where('product_id', '==', pidQuery)
-                    .limit(1)
-                    .get();
-                if (!itemSnapshot.empty) {
+                // Fallback to order_items collection - check both string and number
+                let itemSnapshot = null;
+                if (pidNumber !== null) {
+                    // Try number first
+                    itemSnapshot = await db.collection('order_items')
+                        .where('order_id', '==', orderId)
+                        .where('product_id', '==', pidNumber)
+                        .limit(1)
+                        .get();
+                }
+                // If not found and pidString is different, try string
+                if ((!itemSnapshot || itemSnapshot.empty) && (pidNumber === null || pidString !== String(pidNumber))) {
+                    itemSnapshot = await db.collection('order_items')
+                        .where('order_id', '==', orderId)
+                        .where('product_id', '==', pidString)
+                        .limit(1)
+                        .get();
+                }
+                if (itemSnapshot && !itemSnapshot.empty) {
                     canReview = true;
+                    console.log(`[Eligibility Check] User CAN review - found product in order_items for order ${orderId}`);
                     break;
                 }
             }
         }
+        
+        console.log(`[Eligibility Check] Final result: canReview = ${canReview}`);
         return res.json({ canReview });
     } catch (err) {
         console.error("Eligibility check error:", err);

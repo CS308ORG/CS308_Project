@@ -135,7 +135,16 @@ class _StoreLayoutState extends State<StoreLayout> {
       _suggestions = _allProducts
           .where((product) {
             final name = (product['name'] ?? '').toString().toLowerCase();
-            return name.contains(query);
+            final description = (product['description'] ?? '').toString().toLowerCase();
+            final model = (product['model'] ?? '').toString().toLowerCase();
+            final serialNumber = (product['serial_number'] ?? '').toString().toLowerCase();
+            final categoryNames = getCategoryNames(product).toLowerCase();
+            
+            return name.contains(query) || 
+                   description.contains(query) ||
+                   model.contains(query) ||
+                   serialNumber.contains(query) ||
+                   categoryNames.contains(query);
           })
           .take(6)
           .toList();
@@ -775,6 +784,15 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // Helper function to get average rating for popularity sorting
+  double _getAverageRating(Map<String, dynamic> product) {
+    final averageRating = product['average_rating'];
+    if (averageRating != null && averageRating is num) {
+      return averageRating.toDouble();
+    }
+    return 0.0;
+  }
+
   void _sortProducts(List<dynamic> list) {
     if (_currentSortOption == null) return;
     list.sort((a, b) {
@@ -788,13 +806,15 @@ class _HomeScreenState extends State<HomeScreen> {
         case 'price_desc':
           return (b['price'] ?? 0).compareTo(a['price'] ?? 0);
         case 'pop_asc':
-          return (a['popularity_score'] ?? 0).compareTo(
-            b['popularity_score'] ?? 0,
-          );
+          // Sort by average_rating (yıldız ortalaması) ascending
+          final ratingA = _getAverageRating(a);
+          final ratingB = _getAverageRating(b);
+          return ratingA.compareTo(ratingB);
         case 'pop_desc':
-          return (b['popularity_score'] ?? 0).compareTo(
-            a['popularity_score'] ?? 0,
-          );
+          // Sort by average_rating (yıldız ortalaması) descending
+          final ratingA = _getAverageRating(a);
+          final ratingB = _getAverageRating(b);
+          return ratingB.compareTo(ratingA);
         default:
           return 0;
       }
@@ -826,10 +846,18 @@ class _HomeScreenState extends State<HomeScreen> {
     if (query.isNotEmpty) {
       results = results.where((product) {
         final name = (product['name'] ?? '').toString().toLowerCase();
-        final description = (product['description'] ?? '')
-            .toString()
-            .toLowerCase();
-        return name.contains(query) || description.contains(query);
+        final description = (product['description'] ?? '').toString().toLowerCase();
+        final model = (product['model'] ?? '').toString().toLowerCase();
+        final serialNumber = (product['serial_number'] ?? '').toString().toLowerCase();
+        final categoryNames = getCategoryNames(product).toLowerCase();
+        final distributor = (product['distributor_info'] ?? '').toString().toLowerCase();
+        
+        return name.contains(query) || 
+               description.contains(query) ||
+               model.contains(query) ||
+               serialNumber.contains(query) ||
+               categoryNames.contains(query) ||
+               distributor.contains(query);
       }).toList();
     }
 
@@ -1208,6 +1236,57 @@ class _HomeScreenState extends State<HomeScreen> {
                         fontWeight: FontWeight.w500,
                       ),
                     ),
+                    
+                    const SizedBox(height: 6),
+                    
+                    // Rating Average
+                    if (product['average_rating'] != null && (product['average_rating'] as num) > 0)
+                      Row(
+                        children: [
+                          ...List.generate(5, (index) {
+                            final rating = (product['average_rating'] as num).toDouble();
+                            return Icon(
+                              index < rating.floor()
+                                  ? Icons.star
+                                  : (index < rating ? Icons.star_half : Icons.star_border),
+                              size: 14,
+                              color: Colors.amber,
+                            );
+                          }),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${product['average_rating']}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                          if (product['review_count'] != null && product['review_count'] > 0)
+                            Text(
+                              ' (${product['review_count']})',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                        ],
+                      )
+                    else
+                      Row(
+                        children: [
+                          Icon(Icons.star_border, size: 14, color: Colors.grey[400]),
+                          const SizedBox(width: 4),
+                          Text(
+                            'No ratings yet',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey[500],
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
+                      ),
                     
                     const SizedBox(height: 6),
                     

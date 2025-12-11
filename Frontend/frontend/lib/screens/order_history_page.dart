@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import 'home_screen.dart';
+import 'product_detail.dart';
 
 class OrderHistoryPage extends StatefulWidget {
   @override
@@ -388,60 +389,123 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                     final unitPrice =
                         (item['unit_price'] as num?)?.toDouble() ?? 0.0;
                     final imageUrl = getProductImageUrl(item);
+                    final orderStatus = statusRaw; // Order status for eligibility check
 
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12.0),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.grey.shade300),
+                    return InkWell(
+                      onTap: () async {
+                        // Fetch full product details and navigate to product detail
+                        try {
+                          final products = await _apiService.getProducts();
+                          final product = products.firstWhere(
+                            (p) => (p['product_id'] ?? p['id']).toString() == pid.toString(),
+                            orElse: () => {
+                              'product_id': pid,
+                              'id': pid,
+                              'name': name,
+                              ...item,
+                            },
+                          );
+                          
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ProductDetail(product: product),
                             ),
-                            child: imageUrl != null
-                                ? ClipRRect(
-                                    borderRadius: BorderRadius.circular(7),
-                                    child: Image.network(
-                                      imageUrl,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (ctx, err, stack) =>
-                                          const Icon(
-                                            Icons.broken_image,
-                                            size: 20,
-                                            color: Colors.grey,
-                                          ),
-                                    ),
-                                  )
-                                : const Icon(
-                                    Icons.computer,
-                                    size: 24,
-                                    color: Colors.grey,
-                                  ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Text(
-                              "${qty}x(ID: $pid) $name",
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Colors.black87,
+                          );
+                          // If we return from product detail, refresh eligibility
+                          // This ensures eligibility is re-checked after order status changes
+                          if (result == true && mounted) {
+                            // Optionally refresh order list if needed
+                            // _fetchOrders();
+                          }
+                        } catch (e) {
+                          // If product not found, still navigate with available data
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ProductDetail(
+                                product: {
+                                  'product_id': pid,
+                                  'id': pid,
+                                  'name': name,
+                                  ...item,
+                                },
                               ),
-                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                          const SizedBox(width: 16),
-                          Text(
-                            "(${unitPrice.toStringAsFixed(2)} ₺)x($qty)",
-                            style: const TextStyle(
-                              fontFamily: 'Roboto',
-                              color: Colors.black54,
-                              fontWeight: FontWeight.w500,
+                          );
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 12.0),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.grey.shade300),
+                              ),
+                              child: imageUrl != null
+                                  ? ClipRRect(
+                                      borderRadius: BorderRadius.circular(7),
+                                      child: Image.network(
+                                        imageUrl,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (ctx, err, stack) =>
+                                            const Icon(
+                                              Icons.broken_image,
+                                              size: 20,
+                                              color: Colors.grey,
+                                            ),
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.computer,
+                                      size: 24,
+                                      color: Colors.grey,
+                                    ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "${qty}x(ID: $pid) $name",
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.black87,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if (orderStatus == 'delivered')
+                                    const SizedBox(height: 2),
+                                  if (orderStatus == 'delivered')
+                                    Text(
+                                      "Tap to review",
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.green[700],
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Text(
+                              "(${unitPrice.toStringAsFixed(2)} ₺)x($qty)",
+                              style: const TextStyle(
+                                fontFamily: 'Roboto',
+                                color: Colors.black54,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   }).toList(),

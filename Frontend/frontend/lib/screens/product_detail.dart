@@ -36,6 +36,11 @@ class _ProductDetailState extends State<ProductDetail> {
     });
   }
 
+  // Refresh eligibility check - call this when returning from order history
+  Future<void> refreshEligibilityCheck() async {
+    await _loadReviews();
+  }
+
   @override
   void dispose() {
     _commentController.dispose();

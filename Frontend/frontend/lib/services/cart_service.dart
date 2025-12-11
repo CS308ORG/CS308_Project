@@ -52,8 +52,9 @@ class CartService extends ChangeNotifier {
   }
 
   void addToCart(Map<String, dynamic> product) {
+    final productId = product['id'] ?? product['product_id'];
     final existingIndex = _cartItems.indexWhere(
-      (item) => item['id'] == product['id'],
+      (item) => (item['id'] ?? item['product_id']) == productId,
     );
 
     if (existingIndex != -1) {
@@ -61,12 +62,13 @@ class CartService extends ChangeNotifier {
           (_cartItems[existingIndex]['quantity'] ?? 1) + 1;
     } else {
       _cartItems.add({
-        'id': product['id'],
+        'id': productId,
+        'product_id': productId,
         'name': product['name'],
         'description': product['description'],
         'price': product['price'] ?? 0.0,
         'quantity': 1,
-        'sku': product['serial_number'] ?? 'SKU000',
+        'sku': product['serial_number'] ?? product['sku'] ?? 'SKU000',
       });
     }
     notifyListeners();
@@ -90,9 +92,32 @@ class CartService extends ChangeNotifier {
     }
   }
 
-  void mergeCart(List<dynamic> backendItems) {
-    for (var item in backendItems) {
-      addToCart(item);
+  void mergeCart(List<dynamic> guestItems) {
+    // Merge guest cart items while preserving quantities
+    for (var guestItem in guestItems) {
+      final productId = guestItem['id'] ?? guestItem['product_id'];
+      final guestQuantity = guestItem['quantity'] ?? 1;
+      
+      final existingIndex = _cartItems.indexWhere(
+        (item) => (item['id'] ?? item['product_id']) == productId,
+      );
+
+      if (existingIndex != -1) {
+        // If item already exists, add guest quantity to existing quantity
+        final currentQuantity = _cartItems[existingIndex]['quantity'] ?? 1;
+        _cartItems[existingIndex]['quantity'] = currentQuantity + guestQuantity;
+      } else {
+        // If item doesn't exist, add it with guest quantity
+        _cartItems.add({
+          'id': productId,
+          'product_id': productId,
+          'name': guestItem['name'],
+          'description': guestItem['description'],
+          'price': guestItem['price'] ?? 0.0,
+          'quantity': guestQuantity,
+          'sku': guestItem['sku'] ?? guestItem['serial_number'] ?? 'SKU000',
+        });
+      }
     }
     notifyListeners();
     _persistCart();

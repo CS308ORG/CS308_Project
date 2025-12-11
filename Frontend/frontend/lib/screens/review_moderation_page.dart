@@ -28,6 +28,9 @@ class _ReviewModerationPageState extends State<ReviewModerationPage> {
     });
 
     try {
+      // Clear eligibility cache to force fresh check
+      _eligibilityCache.clear();
+      
       // Use the new backend method from your extended service
       final reviews = await _service.getPendingReviewsFromBackend();
       
@@ -38,6 +41,7 @@ class _ReviewModerationPageState extends State<ReviewModerationPage> {
         final key = '$userId-$productId';
         
         try {
+          // Always check eligibility fresh (don't use cache)
           final eligible = await _service.checkReviewEligibility(userId, productId);
           _eligibilityCache[key] = eligible;
           
@@ -45,6 +49,7 @@ class _ReviewModerationPageState extends State<ReviewModerationPage> {
           final product = await _service.getProductDetails(productId);
           _productCache[productId] = product;
         } catch (e) {
+          print("Error checking eligibility for review: $e");
           _eligibilityCache[key] = false;
         }
       }
