@@ -11,6 +11,7 @@ class _ProductManagerPageState extends State<ProductManagerPage> {
   List<dynamic> _orders = [];
   bool _loading = true;
   String? _error;
+  String _selectedFilter = 'all'; // all, processing, in-transit, delivered
 
   @override
   void initState() {
@@ -38,6 +39,11 @@ class _ProductManagerPageState extends State<ProductManagerPage> {
     }
   }
 
+  List<dynamic> get _filteredOrders {
+    if (_selectedFilter == 'all') return _orders;
+    return _orders.where((order) => order['status'] == _selectedFilter).toList();
+  }
+
   Future<void> _updateOrderStatus(String orderId, String newStatus) async {
     try {
       await _pmService.updateOrderStatus(orderId, newStatus);
@@ -58,8 +64,16 @@ class _ProductManagerPageState extends State<ProductManagerPage> {
     }
   }
 
+  int _getStatusCount(String status) {
+    return _orders.where((order) => order['status'] == status).length;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final processingCount = _getStatusCount('processing');
+    final inTransitCount = _getStatusCount('in-transit');
+    final deliveredCount = _getStatusCount('delivered');
+
     return Scaffold(
       backgroundColor: Color(0xFFFFF5E6),
       appBar: AppBar(
@@ -72,34 +86,124 @@ class _ProductManagerPageState extends State<ProductManagerPage> {
           ),
         ],
       ),
-      body: _loading
-          ? Center(
-              child: CircularProgressIndicator(color: Color(0xFFFF7733)),
-            )
-          : _error != null
-              ? _buildError()
-              : _orders.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.check_circle_outline,
-                              size: 64, color: Colors.green),
-                          SizedBox(height: 16),
-                          Text(
-                            'No pending deliveries!',
-                            style: TextStyle(fontSize: 18),
+      body: Column(
+        children: [
+          // Status Filter Chips
+          Container(
+            color: Colors.white,
+            padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _buildFilterChip(
+                    'All Orders',
+                    'all',
+                    _orders.length,
+                    Colors.grey,
+                  ),
+                  SizedBox(width: 8),
+                  _buildFilterChip(
+                    'Processing',
+                    'processing',
+                    processingCount,
+                    Colors.orange,
+                  ),
+                  SizedBox(width: 8),
+                  _buildFilterChip(
+                    'In Transit',
+                    'in-transit',
+                    inTransitCount,
+                    Colors.blue,
+                  ),
+                  SizedBox(width: 8),
+                  _buildFilterChip(
+                    'Delivered',
+                    'delivered',
+                    deliveredCount,
+                    Colors.green,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Orders List
+          Expanded(
+            child: _loading
+                ? Center(
+                    child: CircularProgressIndicator(color: Color(0xFFFF7733)),
+                  )
+                : _error != null
+                    ? _buildError()
+                    : _filteredOrders.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.check_circle_outline,
+                                  size: 64,
+                                  color: Colors.green,
+                                ),
+                                SizedBox(height: 16),
+                                Text(
+                                  _selectedFilter == 'all'
+                                      ? 'No orders to display!'
+                                      : 'No ${_selectedFilter} orders!',
+                                  style: TextStyle(fontSize: 18),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: EdgeInsets.all(16),
+                            itemCount: _filteredOrders.length,
+                            itemBuilder: (context, index) {
+                              return _buildOrderCard(_filteredOrders[index]);
+                            },
                           ),
-                        ],
-                      ),
-                    )
-                  : ListView.builder(
-                      padding: EdgeInsets.all(16),
-                      itemCount: _orders.length,
-                      itemBuilder: (context, index) {
-                        return _buildOrderCard(_orders[index]);
-                      },
-                    ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, String filter, int count, Color color) {
+    final isSelected = _selectedFilter == filter;
+    return FilterChip(
+      selected: isSelected,
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label),
+          SizedBox(width: 8),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: isSelected ? Colors.white : color.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              count.toString(),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: isSelected ? color : Colors.black87,
+              ),
+            ),
+          ),
+        ],
+      ),
+      selectedColor: color.withOpacity(0.2),
+      checkmarkColor: color,
+      backgroundColor: Colors.white,
+      side: BorderSide(color: isSelected ? color : Colors.grey.shade300),
+      onSelected: (selected) {
+        setState(() {
+          _selectedFilter = filter;
+        });
+      },
     );
   }
 
@@ -110,7 +214,26 @@ class _ProductManagerPageState extends State<ProductManagerPage> {
     final items = order['items'] ?? [];
     final userId = order['user_id'];
 
-    Color statusColor = status == 'processing' ? Colors.orange : Colors.blue;
+    Color statusColor;
+    IconData statusIcon;
+    
+    switch (status) {
+      case 'processing':
+        statusColor = Colors.orange;
+        statusIcon = Icons.hourglass_empty;
+        break;
+      case 'in-transit':
+        statusColor = Colors.blue;
+        statusIcon = Icons.local_shipping;
+        break;
+      case 'delivered':
+        statusColor = Colors.green;
+        statusIcon = Icons.check_circle;
+        break;
+      default:
+        statusColor = Colors.grey;
+        statusIcon = Icons.help_outline;
+    }
 
     return Card(
       margin: EdgeInsets.only(bottom: 16),
@@ -139,13 +262,20 @@ class _ProductManagerPageState extends State<ProductManagerPage> {
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: statusColor),
                   ),
-                  child: Text(
-                    status.toUpperCase(),
-                    style: TextStyle(
-                      color: statusColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(statusIcon, size: 16, color: statusColor),
+                      SizedBox(width: 6),
+                      Text(
+                        status.toUpperCase(),
+                        style: TextStyle(
+                          color: statusColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -179,55 +309,85 @@ class _ProductManagerPageState extends State<ProductManagerPage> {
                 color: Color(0xFFFF7733),
               ),
             ),
-            SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                if (status == 'processing')
+            
+            // Only show action buttons if not delivered
+            if (status != 'delivered') ...[
+              SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  if (status == 'processing')
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () =>
+                            _updateOrderStatus(orderId.toString(), 'in-transit'),
+                        icon: Icon(Icons.local_shipping),
+                        label: Text('Ship Order'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  if (status == 'processing') SizedBox(width: 8),
+                  if (status == 'in-transit')
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () =>
+                            _updateOrderStatus(orderId.toString(), 'delivered'),
+                        icon: Icon(Icons.check_circle),
+                        label: Text('Mark Delivered'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  SizedBox(width: 8),
                   Expanded(
-                    child: ElevatedButton.icon(
+                    child: OutlinedButton.icon(
                       onPressed: () =>
-                          _updateOrderStatus(orderId.toString(), 'in-transit'),
-                      icon: Icon(Icons.local_shipping),
-                      label: Text('Ship Order'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
+                          _updateOrderStatus(orderId.toString(), 'cancelled'),
+                      icon: Icon(Icons.cancel),
+                      label: Text('Cancel'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                        side: BorderSide(color: Colors.red),
                         padding: EdgeInsets.symmetric(vertical: 12),
                       ),
                     ),
                   ),
-                if (status == 'processing') SizedBox(width: 8),
-                if (status == 'in-transit')
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () =>
-                          _updateOrderStatus(orderId.toString(), 'delivered'),
-                      icon: Icon(Icons.check_circle),
-                      label: Text('Mark Delivered'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
-                  ),
-                SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () =>
-                        _updateOrderStatus(orderId.toString(), 'cancelled'),
-                    icon: Icon(Icons.cancel),
-                    label: Text('Cancel'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                      side: BorderSide(color: Colors.red),
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
+                ],
+              ),
+            ] else ...[
+              // Delivered orders show completion info
+              SizedBox(height: 16),
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.withOpacity(0.3)),
                 ),
-              ],
-            ),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.green),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'This order has been successfully delivered',
+                        style: TextStyle(
+                          color: Colors.green[800],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),

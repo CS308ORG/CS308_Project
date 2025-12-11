@@ -11,6 +11,7 @@ import 'basket_page.dart';
 import 'order_history_page.dart'; // Order History
 import 'product_detail.dart';
 import 'product_manager_page.dart';
+import 'review_moderation_page.dart';
 // Product Detail Page
 
 // ==========================================
@@ -292,7 +293,6 @@ class _StoreLayoutState extends State<StoreLayout> {
                   child: const Text('Sign Up'),
                 ),
               ] else ...[
-
                 //ADDED PM
                 // 4. Profile Picture & Dropdown
                 PopupMenuButton<String>(
@@ -313,6 +313,14 @@ class _StoreLayoutState extends State<StoreLayout> {
                         context,
                         MaterialPageRoute(
                           builder: (context) => ProductManagerPage(),
+                        ),
+                      );
+                    } else if (value == 'reviews') {
+                      // FIXED: Added navigation handler for reviews
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ReviewModerationPage(),
                         ),
                       );
                     } else if (value == 'info') {
@@ -337,12 +345,30 @@ class _StoreLayoutState extends State<StoreLayout> {
                         value: 'orders',
                         child: Text('My Orders'),
                       ),
-                      // Show Delivery Queue only for product managers
-                      if (role == 'product_manager')
+                      // Show Product Manager options only for product managers
+                      if (role == 'product_manager') ...[
+                        const PopupMenuDivider(),
                         const PopupMenuItem<String>(
                           value: 'delivery',
-                          child: Text('Delivery Queue'),
+                          child: Row(
+                            children: [
+                              Icon(Icons.local_shipping, size: 18, color: Colors.blue),
+                              SizedBox(width: 8),
+                              Text('Delivery Queue'),
+                            ],
+                          ),
                         ),
+                        const PopupMenuItem<String>(
+                          value: 'reviews',
+                          child: Row(
+                            children: [
+                              Icon(Icons.rate_review, size: 18, color: Colors.orange),
+                              SizedBox(width: 8),
+                              Text('Review Moderation'),
+                            ],
+                          ),
+                        ),
+                      ],
                       const PopupMenuDivider(),
                       const PopupMenuItem<String>(
                         value: 'logout',
