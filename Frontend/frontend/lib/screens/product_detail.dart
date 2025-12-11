@@ -419,7 +419,31 @@ class _ProductDetailState extends State<ProductDetail> {
         children: [
           Center(
             child: url != null
-                ? Image.network(url, fit: BoxFit.contain)
+                ? Image.network(
+                    url,
+                    fit: BoxFit.contain,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return const Center(
+                        child: CircularProgressIndicator(
+                          color: Color(0xFFFF7733),
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.broken_image, size: 100, color: Colors.grey),
+                          SizedBox(height: 8),
+                          Text(
+                            'Image not available',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        ],
+                      );
+                    },
+                  )
                 : const Icon(Icons.computer, size: 100, color: Colors.grey),
           ),
           if (isOutOfStock)

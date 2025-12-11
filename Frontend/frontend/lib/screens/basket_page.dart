@@ -212,7 +212,26 @@ class _BasketPageState extends State<BasketPage> {
             child: imageUrl != null
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(4),
-                    child: Image.network(imageUrl, fit: BoxFit.cover),
+                    child: Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return const Center(
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Color(0xFFFF7733),
+                            ),
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Icon(Icons.broken_image, size: 40, color: Colors.grey);
+                      },
+                    ),
                   )
                 : const Icon(Icons.computer, size: 40, color: Colors.grey),
           ),

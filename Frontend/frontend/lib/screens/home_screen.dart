@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'dart:math'; // For min()
-import 'package:firebase_auth/firebase_auth.dart'; // Authentication
 import '../services/api_service.dart';
 import '../services/cart_service.dart';
 import '../services/auth_service.dart';
@@ -626,6 +625,30 @@ class _StoreLayoutState extends State<StoreLayout> {
                                               width: 56,
                                               height: 56,
                                               fit: BoxFit.cover,
+                                              loadingBuilder: (context, child, loadingProgress) {
+                                                if (loadingProgress == null) return child;
+                                                return const SizedBox(
+                                                  width: 56,
+                                                  height: 56,
+                                                  child: Center(
+                                                    child: SizedBox(
+                                                      width: 20,
+                                                      height: 20,
+                                                      child: CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                        color: Color(0xFFFF7733),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                              errorBuilder: (context, error, stackTrace) {
+                                                return Icon(
+                                                  Icons.broken_image,
+                                                  size: 28,
+                                                  color: Colors.grey[500],
+                                                );
+                                              },
                                             ),
                                           )
                                         : Icon(
@@ -1068,6 +1091,28 @@ class _HomeScreenState extends State<HomeScreen> {
                                 child: Image.network(
                                   imageUrl,
                                   fit: BoxFit.cover,
+                                  loadingBuilder: (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return Center(
+                                      child: CircularProgressIndicator(
+                                        color: const Color(0xFFFF7733),
+                                        value: loadingProgress.expectedTotalBytes != null
+                                            ? loadingProgress.cumulativeBytesLoaded /
+                                                loadingProgress.expectedTotalBytes!
+                                            : null,
+                                      ),
+                                    );
+                                  },
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      color: Colors.grey[200],
+                                      child: Icon(
+                                        Icons.broken_image,
+                                        size: 80,
+                                        color: Colors.grey[400],
+                                      ),
+                                    );
+                                  },
                                 ),
                               )
                             : Icon(
