@@ -13,15 +13,19 @@ const admin = require('firebase-admin');
 const JWT_SECRET = process.env.JWT_SECRET || 'cs308-secret-key-change-in-production';
 
 const serviceAccountPath = process.env.SERVICE_ACCOUNT_PATH;
-if (serviceAccountPath) {
-    const serviceAccount = require(serviceAccountPath);
-    admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-    });
-} else {
-    admin.initializeApp({
-        credential: admin.credential.applicationDefault(),
-    });
+
+// PATCH: Prevent double initialization when running tests in parallel
+if (admin.apps.length === 0) {
+    if (serviceAccountPath) {
+        const serviceAccount = require(serviceAccountPath);
+        admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+        });
+    } else {
+        admin.initializeApp({
+            credential: admin.credential.applicationDefault(),
+        });
+    }
 }
 
 const db = admin.firestore();
@@ -253,14 +257,14 @@ app.get('/collections/:name', async (req, res) => {
 
         const snapshot = await query.get();
         let documents = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        
+
         // If products collection, add average rating for each product
         if (name === 'products') {
             const productIds = documents.map(doc => {
                 const pid = doc.product_id ?? doc.id;
                 return typeof pid === 'number' ? pid : parseInt(pid);
             }).filter(pid => !isNaN(pid));
-            
+
             // Fetch all reviews for these products in batch
             const reviewsPromises = productIds.map(async (pid) => {
                 try {
@@ -268,17 +272,17 @@ app.get('/collections/:name', async (req, res) => {
                         .where('product_id', '==', pid)
                         .where('approval_status', '==', 'approved')
                         .get();
-                    
+
                     const reviews = [];
                     reviewsSnapshot.forEach(doc => reviews.push(doc.data()));
-                    
+
                     if (reviews.length === 0) {
                         return { productId: pid, averageRating: 0, reviewCount: 0 };
                     }
-                    
+
                     const totalRating = reviews.reduce((sum, r) => sum + (r.rating || 0), 0);
                     const averageRating = totalRating / reviews.length;
-                    
+
                     return {
                         productId: pid,
                         averageRating: Math.round(averageRating * 10) / 10, // Round to 1 decimal
@@ -288,19 +292,19 @@ app.get('/collections/:name', async (req, res) => {
                     return { productId: pid, averageRating: 0, reviewCount: 0 };
                 }
             });
-            
+
             const ratingsData = await Promise.all(reviewsPromises);
             const ratingsMap = {};
             ratingsData.forEach(r => {
                 ratingsMap[r.productId] = { averageRating: r.averageRating, reviewCount: r.reviewCount };
             });
-            
+
             // Add rating data to products
             documents = documents.map(doc => {
                 const pid = doc.product_id ?? doc.id;
                 const pidNum = typeof pid === 'number' ? pid : parseInt(pid);
                 const ratingInfo = ratingsMap[pidNum] || { averageRating: 0, reviewCount: 0 };
-                
+
                 // Calculate popularity_score if not exists
                 // Popularity = (average_rating * review_count) / 10
                 // This gives higher score to products with both high ratings and many reviews
@@ -309,7 +313,7 @@ app.get('/collections/:name', async (req, res) => {
                     ? (ratingInfo.averageRating * ratingInfo.reviewCount) / 10
                     : 0;
                 const popularityScore = existingPopularity > 0 ? existingPopularity : calculatedPopularity;
-                
+
                 return {
                     ...doc,
                     average_rating: ratingInfo.averageRating,
@@ -318,7 +322,7 @@ app.get('/collections/:name', async (req, res) => {
                 };
             });
         }
-        
+
         return res.json({ collection: name, count: documents.length, documents });
     } catch (err) {
         console.error(`Failed to read collection ${name}:`, err);
@@ -545,9 +549,9 @@ app.get('/orders/delivery', authenticate, authorize(['product_manager']), async 
         const snapshot = await db.collection('orders')
             .where('status', 'in', ['processing', 'in-transit', 'delivered'])
             .get();
-        
+
         const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
+
         // Sort orders by status priority (processing first, then in-transit, then delivered)
         orders.sort((a, b) => {
             const statusPriority = {
@@ -557,7 +561,7 @@ app.get('/orders/delivery', authenticate, authorize(['product_manager']), async 
             };
             return (statusPriority[a.status] || 999) - (statusPriority[b.status] || 999);
         });
-        
+
         return res.json({ orders });
     } catch (err) {
         console.error('Delivery queue error:', err);
@@ -754,32 +758,32 @@ app.get('/users/:uid/products/:productId/eligibility', authenticate, async (req,
             const orderData = orderDoc.data();
             const orderId = orderData.order_id;
             const orderStatus = orderData.status;
-            
+
             console.log(`[Eligibility Check] Checking order ${orderId} with status: ${orderStatus}`);
-            
+
             // Check direct items array first
             const orderItems = orderData.items;
             console.log(`[Eligibility Check] Order ${orderId} has ${Array.isArray(orderItems) ? orderItems.length : 0} items`);
-            
+
             if (Array.isArray(orderItems) && orderItems.length > 0) {
                 // Check both string and number comparison to handle type mismatches
                 const found = orderItems.some(i => {
                     const itemPid = i.product_id;
                     const itemPidStr = String(itemPid);
                     const itemPidNum = Number(itemPid);
-                    
-                    const matches = String(itemPid) === pidString || 
-                           (pidNumber !== null && Number(itemPid) === pidNumber) ||
-                           itemPid == pidString || 
-                           (pidNumber !== null && itemPid == pidNumber);
-                    
+
+                    const matches = String(itemPid) === pidString ||
+                        (pidNumber !== null && Number(itemPid) === pidNumber) ||
+                        itemPid == pidString ||
+                        (pidNumber !== null && itemPid == pidNumber);
+
                     if (matches) {
                         console.log(`[Eligibility Check] Match found! Order ${orderId}, item product_id: ${itemPid} (type: ${typeof itemPid}) matches ${productId}`);
                     }
-                    
+
                     return matches;
                 });
-                
+
                 if (found) {
                     canReview = true;
                     console.log(`[Eligibility Check] User CAN review - found product in order ${orderId}`);
@@ -813,7 +817,7 @@ app.get('/users/:uid/products/:productId/eligibility', authenticate, async (req,
                 }
             }
         }
-        
+
         console.log(`[Eligibility Check] Final result: canReview = ${canReview}`);
         return res.json({ canReview });
     } catch (err) {
