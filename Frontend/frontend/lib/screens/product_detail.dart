@@ -565,7 +565,7 @@ class _ProductDetailState extends State<ProductDetail> {
                 ? Colors.grey
                 : const Color(0xFFFF7733),
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
+            padding: const EdgeInsets.symmetric(vertical: 22),
           ),
           onPressed: (isOutOfStock || !canAddToCart)
               ? null
