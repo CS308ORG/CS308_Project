@@ -204,7 +204,7 @@ class _StoreLayoutState extends State<StoreLayout> {
                 );
               },
               child: const Text(
-                'CS308 STORE',
+                'All is Here',
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
