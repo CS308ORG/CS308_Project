@@ -18,7 +18,9 @@ class CartService extends ChangeNotifier {
   List<Map<String, dynamic>> get items => _cartItems;
 
   Future<void> loadCartForUser(String? userId) async {
-    _storageKey = userId == null ? _guestKey : 'cart_items_${userId.toString()}';
+    _storageKey = userId == null
+        ? _guestKey
+        : 'cart_items_${userId.toString()}';
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_storageKey);
 
@@ -54,12 +56,18 @@ class CartService extends ChangeNotifier {
   void addToCart(Map<String, dynamic> product) {
     final productId = product['id'] ?? product['product_id'];
     final existingIndex = _cartItems.indexWhere(
-      (item) => (item['id'] ?? item['product_id']) == productId,
+      (item) =>
+          (item['id'] ?? item['product_id']).toString() == productId.toString(),
     );
 
     if (existingIndex != -1) {
       _cartItems[existingIndex]['quantity'] =
           (_cartItems[existingIndex]['quantity'] ?? 1) + 1;
+      // Update stock info in case it changed
+      if (product['quantity_in_stock'] != null) {
+        _cartItems[existingIndex]['quantity_in_stock'] =
+            product['quantity_in_stock'];
+      }
     } else {
       _cartItems.add({
         'id': productId,
@@ -68,6 +76,7 @@ class CartService extends ChangeNotifier {
         'description': product['description'],
         'price': product['price'] ?? 0.0,
         'quantity': 1,
+        'quantity_in_stock': product['quantity_in_stock'] ?? 0,
         'sku': product['serial_number'] ?? product['sku'] ?? 'SKU000',
       });
     }
@@ -97,9 +106,11 @@ class CartService extends ChangeNotifier {
     for (var guestItem in guestItems) {
       final productId = guestItem['id'] ?? guestItem['product_id'];
       final guestQuantity = guestItem['quantity'] ?? 1;
-      
+
       final existingIndex = _cartItems.indexWhere(
-        (item) => (item['id'] ?? item['product_id']) == productId,
+        (item) =>
+            (item['id'] ?? item['product_id']).toString() ==
+            productId.toString(),
       );
 
       if (existingIndex != -1) {
@@ -115,6 +126,7 @@ class CartService extends ChangeNotifier {
           'description': guestItem['description'],
           'price': guestItem['price'] ?? 0.0,
           'quantity': guestQuantity,
+          'quantity_in_stock': guestItem['quantity_in_stock'] ?? 0,
           'sku': guestItem['sku'] ?? guestItem['serial_number'] ?? 'SKU000',
         });
       }

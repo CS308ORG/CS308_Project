@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:math'; // Required for min()
 import '../services/cart_service.dart';
-import '../services/auth_service.dart'; // ADDED: Required for AuthService().isLoggedIn
+import '../services/auth_service.dart';
 import 'credit_card_page.dart';
-import 'home_screen.dart'; // For StoreLayout
-import 'login_screen.dart'; // ADDED: Required for LoginScreen() navigation
+import 'home_screen.dart';
+import 'login_screen.dart';
 
 class BasketPage extends StatefulWidget {
   @override
@@ -91,25 +92,21 @@ class _BasketPageState extends State<BasketPage> {
                   ),
                   const SizedBox(width: 16),
 
-                  // NEXT BUTTON with LOGIN CHECK
                   ElevatedButton.icon(
                     onPressed: () async {
                       final isLoggedIn = AuthService().isLoggedIn;
 
                       if (!isLoggedIn) {
-                        // Forward to Login
                         await Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (context) => LoginScreen(),
                           ),
                         );
-                        // Check if logged in upon return
                         if (AuthService().isLoggedIn) {
                           setState(() {});
                         }
                       } else {
-                        // Already logged in, proceed
                         Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -180,8 +177,14 @@ class _BasketPageState extends State<BasketPage> {
   Widget _buildBasketItem(Map<String, dynamic> item, int index) {
     final imageUrl = getProductImageUrl(item);
     int quantity = item['quantity'] ?? 1;
-    int stock = item['quantity_in_stock'] ?? 10;
-    int maxLimit = stock < 10 ? stock : 10;
+    // Calculate limit: Min of (Available Stock, 10)
+    int stock = item['quantity_in_stock'] ?? 0;
+    int maxLimit = min(stock, 10);
+
+    // Ensure current quantity respects new limit (visual correction only, doesn't change data)
+    if (quantity > maxLimit && maxLimit > 0) {
+      // NOTE: We could auto-correct here, but for now we just restrict adding more.
+    }
 
     double unitPrice = (item['price'] is int)
         ? (item['price'] as int).toDouble()
@@ -229,7 +232,11 @@ class _BasketPageState extends State<BasketPage> {
                         );
                       },
                       errorBuilder: (context, error, stackTrace) {
-                        return const Icon(Icons.broken_image, size: 40, color: Colors.grey);
+                        return const Icon(
+                          Icons.broken_image,
+                          size: 40,
+                          color: Colors.grey,
+                        );
                       },
                     ),
                   )
@@ -313,6 +320,7 @@ class _BasketPageState extends State<BasketPage> {
 
                     const SizedBox(width: 8),
                     InkWell(
+                      // Disable plus button if current quantity reached maxLimit
                       onTap: quantity < maxLimit
                           ? () => setState(
                               () => _cartService.updateQuantity(
@@ -325,7 +333,7 @@ class _BasketPageState extends State<BasketPage> {
                         Icons.add_circle,
                         color: quantity < maxLimit
                             ? const Color(0xFFFF7733)
-                            : Colors.grey,
+                            : Colors.grey, // Grayed out when limit reached
                         size: 28,
                       ),
                     ),

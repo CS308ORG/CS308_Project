@@ -135,16 +135,20 @@ class _StoreLayoutState extends State<StoreLayout> {
       _suggestions = _allProducts
           .where((product) {
             final name = (product['name'] ?? '').toString().toLowerCase();
-            final description = (product['description'] ?? '').toString().toLowerCase();
+            final description = (product['description'] ?? '')
+                .toString()
+                .toLowerCase();
             final model = (product['model'] ?? '').toString().toLowerCase();
-            final serialNumber = (product['serial_number'] ?? '').toString().toLowerCase();
+            final serialNumber = (product['serial_number'] ?? '')
+                .toString()
+                .toLowerCase();
             final categoryNames = getCategoryNames(product).toLowerCase();
-            
-            return name.contains(query) || 
-                   description.contains(query) ||
-                   model.contains(query) ||
-                   serialNumber.contains(query) ||
-                   categoryNames.contains(query);
+
+            return name.contains(query) ||
+                description.contains(query) ||
+                model.contains(query) ||
+                serialNumber.contains(query) ||
+                categoryNames.contains(query);
           })
           .take(6)
           .toList();
@@ -334,7 +338,8 @@ class _StoreLayoutState extends State<StoreLayout> {
                     } else if (value == 'info') {
                       // Navigate to Info (Placeholder)
                     } else if (value == 'logout') {
-                      await AuthService().logout(); // clears current session + cart view
+                      await AuthService()
+                          .logout(); // clears current session + cart view
                       setState(() {});
                       Navigator.of(context).pushAndRemoveUntil(
                         MaterialPageRoute(builder: (context) => HomeScreen()),
@@ -360,7 +365,11 @@ class _StoreLayoutState extends State<StoreLayout> {
                           value: 'delivery',
                           child: Row(
                             children: [
-                              Icon(Icons.local_shipping, size: 18, color: Colors.blue),
+                              Icon(
+                                Icons.local_shipping,
+                                size: 18,
+                                color: Colors.blue,
+                              ),
                               SizedBox(width: 8),
                               Text('Delivery Queue'),
                             ],
@@ -370,7 +379,11 @@ class _StoreLayoutState extends State<StoreLayout> {
                           value: 'reviews',
                           child: Row(
                             children: [
-                              Icon(Icons.rate_review, size: 18, color: Colors.orange),
+                              Icon(
+                                Icons.rate_review,
+                                size: 18,
+                                color: Colors.orange,
+                              ),
                               SizedBox(width: 8),
                               Text('Review Moderation'),
                             ],
@@ -634,30 +647,40 @@ class _StoreLayoutState extends State<StoreLayout> {
                                               width: 56,
                                               height: 56,
                                               fit: BoxFit.cover,
-                                              loadingBuilder: (context, child, loadingProgress) {
-                                                if (loadingProgress == null) return child;
-                                                return const SizedBox(
-                                                  width: 56,
-                                                  height: 56,
-                                                  child: Center(
-                                                    child: SizedBox(
-                                                      width: 20,
-                                                      height: 20,
-                                                      child: CircularProgressIndicator(
-                                                        strokeWidth: 2,
-                                                        color: Color(0xFFFF7733),
+                                              loadingBuilder:
+                                                  (
+                                                    context,
+                                                    child,
+                                                    loadingProgress,
+                                                  ) {
+                                                    if (loadingProgress == null)
+                                                      return child;
+                                                    return const SizedBox(
+                                                      width: 56,
+                                                      height: 56,
+                                                      child: Center(
+                                                        child: SizedBox(
+                                                          width: 20,
+                                                          height: 20,
+                                                          child:
+                                                              CircularProgressIndicator(
+                                                                strokeWidth: 2,
+                                                                color: Color(
+                                                                  0xFFFF7733,
+                                                                ),
+                                                              ),
+                                                        ),
                                                       ),
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                              errorBuilder: (context, error, stackTrace) {
-                                                return Icon(
-                                                  Icons.broken_image,
-                                                  size: 28,
-                                                  color: Colors.grey[500],
-                                                );
-                                              },
+                                                    );
+                                                  },
+                                              errorBuilder:
+                                                  (context, error, stackTrace) {
+                                                    return Icon(
+                                                      Icons.broken_image,
+                                                      size: 28,
+                                                      color: Colors.grey[500],
+                                                    );
+                                                  },
                                             ),
                                           )
                                         : Icon(
@@ -846,18 +869,24 @@ class _HomeScreenState extends State<HomeScreen> {
     if (query.isNotEmpty) {
       results = results.where((product) {
         final name = (product['name'] ?? '').toString().toLowerCase();
-        final description = (product['description'] ?? '').toString().toLowerCase();
+        final description = (product['description'] ?? '')
+            .toString()
+            .toLowerCase();
         final model = (product['model'] ?? '').toString().toLowerCase();
-        final serialNumber = (product['serial_number'] ?? '').toString().toLowerCase();
+        final serialNumber = (product['serial_number'] ?? '')
+            .toString()
+            .toLowerCase();
         final categoryNames = getCategoryNames(product).toLowerCase();
-        final distributor = (product['distributor_info'] ?? '').toString().toLowerCase();
-        
-        return name.contains(query) || 
-               description.contains(query) ||
-               model.contains(query) ||
-               serialNumber.contains(query) ||
-               categoryNames.contains(query) ||
-               distributor.contains(query);
+        final distributor = (product['distributor_info'] ?? '')
+            .toString()
+            .toLowerCase();
+
+        return name.contains(query) ||
+            description.contains(query) ||
+            model.contains(query) ||
+            serialNumber.contains(query) ||
+            categoryNames.contains(query) ||
+            distributor.contains(query);
       }).toList();
     }
 
@@ -1072,6 +1101,22 @@ class _HomeScreenState extends State<HomeScreen> {
     final int stock = product['quantity_in_stock'] ?? 0;
     final bool isOutOfStock = stock == 0;
 
+    // Calculate max allowed (Lowest of stock or 10)
+    final int maxAllowed = min(stock, 10);
+
+    // Check quantity in cart
+    // Using string conversion for ID matching to handle int vs string mismatch
+    final cartItem = CartService().items.firstWhere(
+      (item) =>
+          (item['id'] ?? item['product_id']).toString() ==
+          (product['product_id'] ?? product['id']).toString(),
+      orElse: () => {},
+    );
+    final int currentCartQty = cartItem['quantity'] ?? 0;
+
+    // Disable if cart quantity reached max allowed
+    final bool canAddToCart = currentCartQty < maxAllowed;
+
     return MouseRegion(
       cursor: isOutOfStock
           ? SystemMouseCursors.basic
@@ -1119,18 +1164,25 @@ class _HomeScreenState extends State<HomeScreen> {
                                 child: Image.network(
                                   imageUrl,
                                   fit: BoxFit.cover,
-                                  loadingBuilder: (context, child, loadingProgress) {
-                                    if (loadingProgress == null) return child;
-                                    return Center(
-                                      child: CircularProgressIndicator(
-                                        color: const Color(0xFFFF7733),
-                                        value: loadingProgress.expectedTotalBytes != null
-                                            ? loadingProgress.cumulativeBytesLoaded /
-                                                loadingProgress.expectedTotalBytes!
-                                            : null,
-                                      ),
-                                    );
-                                  },
+                                  loadingBuilder:
+                                      (context, child, loadingProgress) {
+                                        if (loadingProgress == null)
+                                          return child;
+                                        return Center(
+                                          child: CircularProgressIndicator(
+                                            color: const Color(0xFFFF7733),
+                                            value:
+                                                loadingProgress
+                                                        .expectedTotalBytes !=
+                                                    null
+                                                ? loadingProgress
+                                                          .cumulativeBytesLoaded /
+                                                      loadingProgress
+                                                          .expectedTotalBytes!
+                                                : null,
+                                          ),
+                                        );
+                                      },
                                   errorBuilder: (context, error, stackTrace) {
                                     return Container(
                                       color: Colors.grey[200],
@@ -1192,7 +1244,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     const SizedBox(height: 4),
-                    
+
                     // Product Name
                     Text(
                       product['name'] ?? 'Product',
@@ -1204,29 +1256,25 @@ class _HomeScreenState extends State<HomeScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 6),
-                    
+
                     // Model
-                    if (product['model'] != null && product['model'].toString().isNotEmpty)
+                    if (product['model'] != null &&
+                        product['model'].toString().isNotEmpty)
                       Text(
                         'Model: ${product['model']}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey[700],
-                        ),
+                        style: TextStyle(fontSize: 11, color: Colors.grey[700]),
                       ),
-                    
+
                     // Serial Number
-                    if (product['serial_number'] != null && product['serial_number'].toString().isNotEmpty)
+                    if (product['serial_number'] != null &&
+                        product['serial_number'].toString().isNotEmpty)
                       Text(
                         'Serial: ${product['serial_number']}',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey[600],
-                        ),
+                        style: TextStyle(fontSize: 10, color: Colors.grey[600]),
                       ),
-                    
+
                     const SizedBox(height: 6),
-                    
+
                     // Category
                     Text(
                       getCategoryNames(product),
@@ -1236,19 +1284,23 @@ class _HomeScreenState extends State<HomeScreen> {
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    
+
                     const SizedBox(height: 6),
-                    
+
                     // Rating Average
-                    if (product['average_rating'] != null && (product['average_rating'] as num) > 0)
+                    if (product['average_rating'] != null &&
+                        (product['average_rating'] as num) > 0)
                       Row(
                         children: [
                           ...List.generate(5, (index) {
-                            final rating = (product['average_rating'] as num).toDouble();
+                            final rating = (product['average_rating'] as num)
+                                .toDouble();
                             return Icon(
                               index < rating.floor()
                                   ? Icons.star
-                                  : (index < rating ? Icons.star_half : Icons.star_border),
+                                  : (index < rating
+                                        ? Icons.star_half
+                                        : Icons.star_border),
                               size: 14,
                               color: Colors.amber,
                             );
@@ -1262,7 +1314,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               color: Colors.grey[700],
                             ),
                           ),
-                          if (product['review_count'] != null && product['review_count'] > 0)
+                          if (product['review_count'] != null &&
+                              product['review_count'] > 0)
                             Text(
                               ' (${product['review_count']})',
                               style: TextStyle(
@@ -1275,7 +1328,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     else
                       Row(
                         children: [
-                          Icon(Icons.star_border, size: 14, color: Colors.grey[400]),
+                          Icon(
+                            Icons.star_border,
+                            size: 14,
+                            color: Colors.grey[400],
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             'No ratings yet',
@@ -1287,9 +1344,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ],
                       ),
-                    
+
                     const SizedBox(height: 6),
-                    
+
                     // Price
                     Text(
                       '${product['price'] ?? 0} ₺',
@@ -1299,21 +1356,21 @@ class _HomeScreenState extends State<HomeScreen> {
                         color: Color(0xFFFF7733),
                       ),
                     ),
-                    
+
                     const SizedBox(height: 4),
-                    
+
                     // Stock
                     Text(
                       'Stock: ${product['quantity_in_stock'] ?? 0}',
                       style: TextStyle(
                         fontSize: 11,
-                        color: (product['quantity_in_stock'] ?? 0) > 0 
-                            ? Colors.green[700] 
+                        color: (product['quantity_in_stock'] ?? 0) > 0
+                            ? Colors.green[700]
                             : Colors.red[700],
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    
+
                     // Warranty Status
                     if (product['warranty_status'] != null)
                       Padding(
@@ -1336,12 +1393,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
                       ),
-                    
+
                     const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: isOutOfStock
+                        onPressed: (isOutOfStock || !canAddToCart)
                             ? null
                             : () {
                                 CartService().addToCart(product);
@@ -1357,14 +1414,18 @@ class _HomeScreenState extends State<HomeScreen> {
                                 );
                               },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: isOutOfStock
+                          backgroundColor: (isOutOfStock || !canAddToCart)
                               ? Colors.grey
                               : const Color(0xFFFF7733),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                         child: Text(
-                          isOutOfStock ? 'Out of Stock' : 'Add to Cart',
+                          isOutOfStock
+                              ? 'Out of Stock'
+                              : (!canAddToCart
+                                    ? 'Max Stock in Cart'
+                                    : 'Add to Cart'),
                         ),
                       ),
                     ),

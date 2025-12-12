@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:math'; // For min()
 import '../services/cart_service.dart';
 import '../services/auth_service.dart';
 import '../services/api_service.dart';
@@ -8,7 +9,6 @@ import 'login_screen.dart';
 
 class ProductDetail extends StatefulWidget {
   final Map<String, dynamic> product;
-
   const ProductDetail({Key? key, required this.product}) : super(key: key);
 
   @override
@@ -111,6 +111,18 @@ class _ProductDetailState extends State<ProductDetail> {
     final productId = widget.product['product_id'] ?? widget.product['id'];
     final bool isOutOfStock = stock == 0;
 
+    // Calculate max allowed (Lowest of stock or 10)
+    final int maxAllowed = min(stock, 10);
+
+    // Check quantity in cart
+    final cartItem = CartService().items.firstWhere(
+      (item) =>
+          (item['id'] ?? item['product_id']).toString() == productId.toString(),
+      orElse: () => {},
+    );
+    final int currentCartQty = cartItem['quantity'] ?? 0;
+    final bool canAddToCart = currentCartQty < maxAllowed;
+
     return StoreLayout(
       body: SingleChildScrollView(
         child: Padding(
@@ -128,6 +140,7 @@ class _ProductDetailState extends State<ProductDetail> {
                 description,
                 distributor,
                 isOutOfStock,
+                canAddToCart,
               ),
 
               const SizedBox(height: 40),
@@ -439,7 +452,11 @@ class _ProductDetailState extends State<ProductDetail> {
                       return const Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.broken_image, size: 100, color: Colors.grey),
+                          Icon(
+                            Icons.broken_image,
+                            size: 100,
+                            color: Colors.grey,
+                          ),
                           SizedBox(height: 8),
                           Text(
                             'Image not available',
@@ -513,6 +530,7 @@ class _ProductDetailState extends State<ProductDetail> {
     String desc,
     String distributor,
     bool isOutOfStock,
+    bool canAddToCart,
   ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -543,13 +561,13 @@ class _ProductDetailState extends State<ProductDetail> {
         const SizedBox(height: 20),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: isOutOfStock
+            backgroundColor: (isOutOfStock || !canAddToCart)
                 ? Colors.grey
                 : const Color(0xFFFF7733),
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 16),
           ),
-          onPressed: isOutOfStock
+          onPressed: (isOutOfStock || !canAddToCart)
               ? null
               : () {
                   CartService().addToCart(widget.product);
@@ -559,7 +577,9 @@ class _ProductDetailState extends State<ProductDetail> {
                   );
                 },
           child: Text(
-            isOutOfStock ? "Out of Stock" : "Add to Cart",
+            isOutOfStock
+                ? "Out of Stock"
+                : (!canAddToCart ? "Max Stock in Cart" : "Add to Cart"),
             style: const TextStyle(fontSize: 18),
           ),
         ),
