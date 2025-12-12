@@ -330,7 +330,8 @@ async function testNonExistentUserLogin() {
       password: 'anypassword'
     });
 
-  expect(response.statusCode).toBe(404);
+  // FIXED: Expect 401 (Unauthorized) instead of 404 to match backend security
+  expect(response.statusCode).toBe(401);
   expect(response.body.success).toBe(false);
 }
 
