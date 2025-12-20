@@ -23,15 +23,85 @@ void main() async {
 class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    // Modern orange color palette
+    const primaryOrange = Color(0xFFFF7733);
+    const lightOrange = Color(0xFFFFA366);
+    const darkOrange = Color(0xFFFF5500);
+    const creamBackground = Color(0xFFFFF8F0);
+    const softWhite = Color(0xFFFFFFFF);
+    
     return MaterialApp(
       title: 'CS308 Store',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primaryColor: Color(0xFFFF7733),
-        scaffoldBackgroundColor: Color(0xFFFFF5E6),
-        colorScheme: ColorScheme.fromSwatch().copyWith(
-          primary: Color(0xFFFF7733),
-          secondary: Color(0xFFFF7733),
+        useMaterial3: true,
+        primaryColor: primaryOrange,
+        scaffoldBackgroundColor: creamBackground,
+        colorScheme: ColorScheme.light(
+          primary: primaryOrange,
+          secondary: lightOrange,
+          tertiary: darkOrange,
+          surface: softWhite,
+          background: creamBackground,
+          error: Color(0xFFFF4444),
+          onPrimary: Colors.white,
+          onSecondary: Colors.white,
+          onSurface: Color(0xFF333333),
+          onBackground: Color(0xFF333333),
+        ),
+        appBarTheme: AppBarTheme(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          iconTheme: IconThemeData(color: primaryOrange),
+          titleTextStyle: TextStyle(
+            color: primaryOrange,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: primaryOrange,
+            foregroundColor: Colors.white,
+            elevation: 2,
+            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: primaryOrange,
+            side: BorderSide(color: primaryOrange, width: 1.5),
+            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        cardTheme: CardThemeData(
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          color: softWhite,
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: softWhite,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Color(0xFFE0E0E0)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Color(0xFFE0E0E0)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: primaryOrange, width: 2),
+          ),
         ),
       ),
       home: HomeScreen(),

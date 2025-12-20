@@ -31,9 +31,21 @@ class ApiService {
   }
 
   Future<List<dynamic>> getProducts() async {
-    final response = await http.get(Uri.parse('$baseUrl/collections/products'));
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body)['documents'] ?? [];
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/collections/products'),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        print('Products response: ${data.toString()}');
+        return data['documents'] ?? [];
+      } else {
+        print(
+          'Failed to fetch products: ${response.statusCode} - ${response.body}',
+        );
+      }
+    } catch (e) {
+      print('Error fetching products: $e');
     }
     return [];
   }
@@ -217,21 +229,25 @@ class ApiService {
   }
 
   // 6. Checkout - Create order from cart items
-  Future<Map<String, dynamic>?> checkout(String userId, List<Map<String, dynamic>> cartItems) async {
+  Future<Map<String, dynamic>?> checkout(
+    String userId,
+    List<Map<String, dynamic>> cartItems,
+  ) async {
     try {
       // Convert cart items to checkout format
-      final items = cartItems.map((item) => {
-        'product_id': item['id'],
-        'quantity': item['quantity'] ?? 1,
-      }).toList();
+      final items = cartItems
+          .map(
+            (item) => {
+              'product_id': item['id'],
+              'quantity': item['quantity'] ?? 1,
+            },
+          )
+          .toList();
 
       final response = await http.post(
         Uri.parse('$baseUrl/checkout'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'user_id': userId,
-          'items': items,
-        }),
+        body: jsonEncode({'user_id': userId, 'items': items}),
       );
 
       if (response.statusCode == 201) {
