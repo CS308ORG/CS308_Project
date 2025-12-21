@@ -210,10 +210,20 @@ class _CreditCardPageState extends State<CreditCardPage> {
         // Clear cart after successful checkout
         await cartService.clearCart();
         
+        // Prepare order data with all necessary fields
+        final orderData = result['order'] ?? result;
+        // Ensure total_amount and date are present
+        if (orderData['total_amount'] == null || orderData['total_amount'] == 0) {
+          orderData['total_amount'] = widget.totalPrice;
+        }
+        if (orderData['date'] == null && orderData['created_at'] == null) {
+          orderData['date'] = DateTime.now().toIso8601String();
+        }
+        
         // Navigate to invoice page instead of showing dialog
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (context) => InvoicePage(orderData: result['order'] ?? result),
+            builder: (context) => InvoicePage(orderData: orderData),
           ),
         );
       } else {

@@ -11,6 +11,8 @@ import 'order_history_page.dart'; // Order History
 import 'product_detail.dart';
 import 'product_manager_page.dart';
 import 'review_moderation_page.dart';
+import 'admin_home.dart';
+import 'customer_home.dart';
 // Product Detail Page
 
 // ==========================================
@@ -84,6 +86,7 @@ class StoreLayout extends StatefulWidget {
 }
 
 class _StoreLayoutState extends State<StoreLayout> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final ApiService _apiService = ApiService();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
@@ -170,17 +173,293 @@ class _StoreLayoutState extends State<StoreLayout> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: const Color(0xFFFFF5E6),
-      body: GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(),
-        child: Column(
-          children: [
-            _buildHeader(),
-            _buildNavBar(),
+      drawer: _buildDrawer(),
+      body: Column(
+        children: [
+          _buildHeader(),
+          _buildNavBar(),
             _buildSearchRow(),
-            Expanded(child: widget.body),
-          ],
+          Expanded(
+            child: GestureDetector(
+              onTap: () => FocusScope.of(context).unfocus(),
+              behavior: HitTestBehavior.opaque,
+              child: widget.body,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDrawer() {
+    final authService = AuthService();
+    final isLoggedIn = authService.isLoggedIn;
+    final userRole = authService.userRole;
+    final userName = authService.userName;
+
+    return Drawer(
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFFFF5E6),
+              Color(0xFFFFE8D6),
+              Color(0xFFFFF5E6),
+            ],
+          ),
         ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Header
+              Container(
+                padding: EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Color(0xFFFF7733),
+                      Color(0xFFFFA366),
+                    ],
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.shopping_bag_rounded,
+                        color: Colors.white,
+                        size: 32,
+                      ),
+                    ),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'All is Here',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          if (isLoggedIn)
+                            Text(
+                              userName,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.white.withOpacity(0.9),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Menu Items
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    _buildDrawerItem(
+                      icon: Icons.home_rounded,
+                      title: 'Home',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.of(context).pushAndRemoveUntil(
+                          MaterialPageRoute(builder: (context) => HomeScreen()),
+                          (route) => false,
+                        );
+                      },
+                    ),
+                    _buildDrawerItem(
+                      icon: Icons.shopping_cart_rounded,
+                      title: 'Shopping Cart',
+                      badge: CartService().itemCount > 0 ? CartService().itemCount : null,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => BasketPage()),
+                        );
+                      },
+                    ),
+                    _buildDrawerItem(
+                      icon: Icons.history_rounded,
+                      title: 'Order History',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => OrderHistoryPage()),
+                        );
+                      },
+                    ),
+                    Divider(height: 32),
+                    if (isLoggedIn) ...[
+                      if (userRole == 'product_manager')
+                        _buildDrawerItem(
+                          icon: Icons.local_shipping_rounded,
+                          title: 'Delivery Queue',
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => ProductManagerPage()),
+                            );
+                          },
+                        ),
+                      if (userRole == 'product_manager')
+                        _buildDrawerItem(
+                          icon: Icons.reviews_rounded,
+                          title: 'Review Moderation',
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => ReviewModerationPage()),
+                            );
+                          },
+                        ),
+                      if (userRole == 'admin')
+                        _buildDrawerItem(
+                          icon: Icons.admin_panel_settings_rounded,
+                          title: 'Admin Dashboard',
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => AdminHome(
+                                username: userName,
+                                role: userRole,
+                              )),
+                            );
+                          },
+                        ),
+                      if (userRole == 'customer')
+                        _buildDrawerItem(
+                          icon: Icons.person_rounded,
+                          title: 'Customer Dashboard',
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => CustomerHome(
+                                username: userName,
+                                role: userRole,
+                              )),
+                            );
+                          },
+                        ),
+                      Divider(height: 32),
+                      _buildDrawerItem(
+                        icon: Icons.logout_rounded,
+                        title: 'Logout',
+                        onTap: () async {
+                          Navigator.pop(context);
+                          await authService.logout();
+                          Navigator.of(context).pushAndRemoveUntil(
+                            MaterialPageRoute(builder: (context) => HomeScreen()),
+                            (route) => false,
+                          );
+                        },
+                      ),
+                    ] else ...[
+                      _buildDrawerItem(
+                        icon: Icons.login_rounded,
+                        title: 'Login',
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => LoginScreen()),
+                          );
+                        },
+                      ),
+                      _buildDrawerItem(
+                        icon: Icons.person_add_rounded,
+                        title: 'Sign Up',
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => SignupScreen()),
+                          );
+                        },
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDrawerItem({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+    int? badge,
+  }) {
+    return ListTile(
+      leading: Container(
+        padding: EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Color(0xFFFF7733).withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(
+          icon,
+          color: Color(0xFFFF7733),
+          size: 24,
+        ),
+      ),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: Colors.grey[800],
+        ),
+      ),
+      trailing: badge != null && badge > 0
+          ? Container(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                badge.toString(),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            )
+          : Icon(
+              Icons.chevron_right_rounded,
+              color: Colors.grey[400],
+            ),
+      onTap: onTap,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
       ),
     );
   }
@@ -212,32 +491,50 @@ class _StoreLayoutState extends State<StoreLayout> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: () {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (context) => HomeScreen()),
-                  (route) => false,
-                );
-              },
-              child: ShaderMask(
-                shaderCallback: (bounds) => LinearGradient(
-                  colors: [
-                    const Color(0xFFFF7733),
-                    const Color(0xFFFFA366),
-                  ],
-                ).createShader(bounds),
-                child: const Text(
-                  'All is Here',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+          Row(
+            children: [
+              // Navigation Icon
+              IconButton(
+                icon: const Icon(
+                  Icons.menu_rounded,
+                  size: 28,
+                  color: Color(0xFFFF7733),
+                ),
+                onPressed: () {
+                  _scaffoldKey.currentState?.openDrawer();
+                },
+                tooltip: 'Menu',
+              ),
+              const SizedBox(width: 8),
+              // Logo
+              MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(builder: (context) => HomeScreen()),
+                      (route) => false,
+                    );
+                  },
+                  child: ShaderMask(
+                    shaderCallback: (bounds) => LinearGradient(
+                      colors: [
+                        const Color(0xFFFF7733),
+                        const Color(0xFFFFA366),
+                      ],
+                    ).createShader(bounds),
+                    child: const Text(
+                      'All is Here',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
+            ],
           ),
           Row(
             children: [
@@ -1249,74 +1546,210 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
       onAddToCart: () {
+        // This will be called multiple times based on quantity
         CartService().addToCart(product);
         setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: Colors.white),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text('${product['name']} added to cart!'),
-                ),
-              ],
-            ),
-            backgroundColor: const Color(0xFFFF7733),
-            duration: const Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
       },
     );
   }
 
   Widget _buildPaginationControls(int totalPages) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 32),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          IconButton(
-            icon: const Text(
-              '<',
-              style: TextStyle(
-                fontSize: 24,
-                color: Color(0xFFFF7733),
-                fontWeight: FontWeight.bold,
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 20,
+              offset: Offset(0, 4),
+              spreadRadius: 0,
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Previous Button
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _currentPage > 1
+                    ? () => setState(() => _currentPage--)
+                    : null,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: _currentPage > 1
+                        ? Color(0xFFFF7733).withOpacity(0.1)
+                        : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _currentPage > 1
+                          ? Color(0xFFFF7733).withOpacity(0.3)
+                          : Colors.grey[300]!,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.chevron_left_rounded,
+                        color: _currentPage > 1
+                            ? Color(0xFFFF7733)
+                            : Colors.grey[400],
+                        size: 24,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Previous',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: _currentPage > 1
+                              ? Color(0xFFFF7733)
+                              : Colors.grey[400],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-            onPressed: _currentPage > 1
-                ? () => setState(() => _currentPage--)
-                : null,
-          ),
-          const SizedBox(width: 16),
-          Text(
-            'Page $_currentPage of $totalPages',
-            style: const TextStyle(
-              fontSize: 18,
-              color: Color(0xFFFF7733),
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(width: 16),
-          IconButton(
-            icon: const Text(
-              '>',
-              style: TextStyle(
-                fontSize: 24,
-                color: Color(0xFFFF7733),
-                fontWeight: FontWeight.bold,
+            const SizedBox(width: 20),
+            
+            // Page Info
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color(0xFFFF7733),
+                    Color(0xFFFFA366),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0xFFFF7733).withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Page',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '$_currentPage',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFFF7733),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'of',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '$totalPages',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            onPressed: _currentPage < totalPages
-                ? () => setState(() => _currentPage++)
-                : null,
-          ),
-        ],
+            const SizedBox(width: 20),
+            
+            // Next Button
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _currentPage < totalPages
+                    ? () => setState(() => _currentPage++)
+                    : null,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: _currentPage < totalPages
+                        ? Color(0xFFFF7733).withOpacity(0.1)
+                        : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _currentPage < totalPages
+                          ? Color(0xFFFF7733).withOpacity(0.3)
+                          : Colors.grey[300]!,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Next',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: _currentPage < totalPages
+                              ? Color(0xFFFF7733)
+                              : Colors.grey[400],
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: _currentPage < totalPages
+                            ? Color(0xFFFF7733)
+                            : Colors.grey[400],
+                        size: 24,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1964,19 +2397,29 @@ class _ProductCardWidgetState extends State<_ProductCardWidget> {
                               ),
                             ),
                           ),
+                          const SizedBox(height: 8),
+                          // Product ID
+                          Text(
+                            'ID: ${widget.product['product_id'] ?? widget.product['id'] ?? 'N/A'}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                           const SizedBox(height: 12),
 
                           // Product Name - Larger and bolder
                           Text(
                             widget.product['name'] ?? 'Product',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: _isHovered ? 17 : 16,
                               height: 1.3,
                               color: Colors.grey[900],
                             ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 12),
 
@@ -2021,7 +2464,7 @@ class _ProductCardWidgetState extends State<_ProductCardWidget> {
                                     ),
                                 ],
                               ),
-                              // Quick add button
+                              // Add to Cart button
                               if (!widget.isOutOfStock && widget.canAddToCart)
                                 Material(
                                   color: Colors.transparent,
@@ -2029,7 +2472,10 @@ class _ProductCardWidgetState extends State<_ProductCardWidget> {
                                     onTap: widget.onAddToCart,
                                     borderRadius: BorderRadius.circular(12),
                                     child: Container(
-                                      padding: const EdgeInsets.all(10),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 10,
+                                      ),
                                       decoration: BoxDecoration(
                                         gradient: LinearGradient(
                                           colors: [
@@ -2047,10 +2493,25 @@ class _ProductCardWidgetState extends State<_ProductCardWidget> {
                                           ),
                                         ],
                                       ),
-                                      child: const Icon(
-                                        Icons.add_shopping_cart,
-                                        color: Colors.white,
-                                        size: 20,
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(
+                                            Icons.add_shopping_cart,
+                                            color: Colors.white,
+                                            size: 18,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          const Text(
+                                            'Add to Cart',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),
@@ -2065,8 +2526,6 @@ class _ProductCardWidgetState extends State<_ProductCardWidget> {
               ),
             ),
           ),
-        ),
-      ),
     );
   }
 }
@@ -2074,47 +2533,201 @@ class _ProductCardWidgetState extends State<_ProductCardWidget> {
 extension _HomeScreenStateMethods on _HomeScreenState {
   Widget _buildPaginationControls(int totalPages) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 32),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          IconButton(
-            icon: const Text(
-              '<',
-              style: TextStyle(
-                fontSize: 24,
-                color: Color(0xFFFF7733),
-                fontWeight: FontWeight.bold,
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 20,
+              offset: Offset(0, 4),
+              spreadRadius: 0,
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Previous Button
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _currentPage > 1
+                    ? () => setState(() => _currentPage--)
+                    : null,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: _currentPage > 1
+                        ? Color(0xFFFF7733).withOpacity(0.1)
+                        : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _currentPage > 1
+                          ? Color(0xFFFF7733).withOpacity(0.3)
+                          : Colors.grey[300]!,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.chevron_left_rounded,
+                        color: _currentPage > 1
+                            ? Color(0xFFFF7733)
+                            : Colors.grey[400],
+                        size: 24,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Previous',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: _currentPage > 1
+                              ? Color(0xFFFF7733)
+                              : Colors.grey[400],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-            onPressed: _currentPage > 1
-                ? () => setState(() => _currentPage--)
-                : null,
-          ),
-          const SizedBox(width: 16),
-          Text(
-            'Page $_currentPage of $totalPages',
-            style: const TextStyle(
-              fontSize: 18,
-              color: Color(0xFFFF7733),
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(width: 16),
-          IconButton(
-            icon: const Text(
-              '>',
-              style: TextStyle(
-                fontSize: 24,
-                color: Color(0xFFFF7733),
-                fontWeight: FontWeight.bold,
+            const SizedBox(width: 20),
+            
+            // Page Info
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color(0xFFFF7733),
+                    Color(0xFFFFA366),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0xFFFF7733).withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Page',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '$_currentPage',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFFF7733),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'of',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '$totalPages',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            onPressed: _currentPage < totalPages
-                ? () => setState(() => _currentPage++)
-                : null,
-          ),
-        ],
+            const SizedBox(width: 20),
+            
+            // Next Button
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _currentPage < totalPages
+                    ? () => setState(() => _currentPage++)
+                    : null,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: _currentPage < totalPages
+                        ? Color(0xFFFF7733).withOpacity(0.1)
+                        : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _currentPage < totalPages
+                          ? Color(0xFFFF7733).withOpacity(0.3)
+                          : Colors.grey[300]!,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Next',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: _currentPage < totalPages
+                              ? Color(0xFFFF7733)
+                              : Colors.grey[400],
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: _currentPage < totalPages
+                            ? Color(0xFFFF7733)
+                            : Colors.grey[400],
+                        size: 24,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
