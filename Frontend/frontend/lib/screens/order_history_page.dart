@@ -484,13 +484,74 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                                   if (orderStatus == 'delivered')
                                     const SizedBox(height: 2),
                                   if (orderStatus == 'delivered')
-                                    Text(
-                                      "Tap to review",
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.green[700],
-                                        fontStyle: FontStyle.italic,
-                                      ),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        // Check if item has refund status
+                                        if (item['refund_status'] != null) ...[
+                                          Container(
+                                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: item['refund_status'] == 'refunded' 
+                                                  ? Colors.green.shade50 
+                                                  : Colors.red.shade50,
+                                              borderRadius: BorderRadius.circular(4),
+                                              border: Border.all(
+                                                color: item['refund_status'] == 'refunded' 
+                                                    ? Colors.green.shade300 
+                                                    : Colors.red.shade300,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              item['refund_status'] == 'refunded' 
+                                                  ? "✓ Refund Accepted" 
+                                                  : "✗ Refund Rejected",
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: item['refund_status'] == 'refunded' 
+                                                    ? Colors.green.shade700 
+                                                    : Colors.red.shade700,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                          SizedBox(height: 4),
+                                        ],
+                                        Row(
+                                          children: [
+                                            Text(
+                                              "Tap to review",
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: Colors.green[700],
+                                                fontStyle: FontStyle.italic,
+                                              ),
+                                            ),
+                                            if (item['refund_status'] == null) ...[
+                                              SizedBox(width: 8),
+                                              GestureDetector(
+                                                onTap: () => _showRefundDialog(context, order, item),
+                                                child: Container(
+                                                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.orange.shade50,
+                                                    borderRadius: BorderRadius.circular(4),
+                                                    border: Border.all(color: Colors.orange.shade300),
+                                                  ),
+                                                  child: Text(
+                                                    "Request Refund",
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      color: Colors.orange.shade700,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ],
                                     ),
                                 ],
                               ),
@@ -595,6 +656,247 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
         return Colors.red;
       default:
         return Colors.black87;
+    }
+  }
+
+  void _showRefundDialog(BuildContext context, Map<String, dynamic> order, Map<String, dynamic> item) {
+    final TextEditingController reasonController = TextEditingController();
+    final productName = item['name'] ?? 'Product';
+    final productId = item['product_id'] ?? item['id'];
+    final orderId = order['order_id'] ?? order['id'];
+    final unitPrice = (item['unit_price'] as num?)?.toDouble() ?? 0.0;
+    final quantity = item['quantity'] ?? 1;
+    final totalPrice = unitPrice * quantity;
+    
+    // Check purchase date for 30-day window (from purchase, not delivery)
+    DateTime? purchaseDate;
+    if (order['created_at'] != null) {
+      try {
+        purchaseDate = DateTime.tryParse(order['created_at'].toString());
+      } catch (e) {}
+    }
+    if (purchaseDate == null && order['date'] != null) {
+      purchaseDate = DateTime.tryParse(order['date']);
+    }
+    
+    bool isWithin30Days = true;
+    String daysMessage = '';
+    if (purchaseDate != null) {
+      final daysSincePurchase = DateTime.now().difference(purchaseDate).inDays;
+      isWithin30Days = daysSincePurchase <= 30;
+      daysMessage = '$daysSincePurchase days since purchase';
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.9,
+          constraints: BoxConstraints(maxWidth: 600),
+          padding: EdgeInsets.all(32),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.assignment_return, color: Color(0xFFFF7733), size: 32),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Request Refund',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF333333),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 24),
+                Container(
+                  padding: EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Color(0xFFF8F9FA),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildRefundInfoRow('Product', productName),
+                      _buildRefundInfoRow('Order ID', '#$orderId'),
+                      _buildRefundInfoRow('Quantity', quantity.toString()),
+                      _buildRefundInfoRow('Unit Price', '\$${unitPrice.toStringAsFixed(2)}'),
+                      _buildRefundInfoRow('Total Amount', '\$${totalPrice.toStringAsFixed(2)}'),
+                      if (purchaseDate != null)
+                        _buildRefundInfoRow('Purchase Date', 
+                          '${purchaseDate.year}-${purchaseDate.month.toString().padLeft(2, '0')}-${purchaseDate.day.toString().padLeft(2, '0')}'),
+                      if (daysMessage.isNotEmpty)
+                        _buildRefundInfoRow('Time Since Purchase', daysMessage),
+                    ],
+                  ),
+                ),
+                if (!isWithin30Days) ...[
+                  SizedBox(height: 16),
+                  Container(
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.orange.shade300),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'More than 30 days since purchase. Refund may not be eligible.',
+                            style: TextStyle(
+                              color: Colors.orange.shade700,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                SizedBox(height: 24),
+                Text(
+                  'Reason for Refund (Optional):',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+                SizedBox(height: 8),
+                TextField(
+                  controller: reasonController,
+                  decoration: InputDecoration(
+                    hintText: 'Please provide a reason for your refund request...',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: EdgeInsets.all(16),
+                  ),
+                  maxLines: 4,
+                ),
+                SizedBox(height: 32),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      ),
+                      child: Text(
+                        'Cancel',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    ElevatedButton(
+                      onPressed: () async {
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                          await _submitRefundRequest(orderId, productId, reasonController.text);
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Color(0xFFFF7733),
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text('Submit Request', style: TextStyle(fontSize: 16)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRefundInfoRow(String label, String value) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 140,
+            child: Text(
+              '$label:',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
+                fontSize: 14,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.black87,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _submitRefundRequest(dynamic orderId, dynamic productId, String reason) async {
+    try {
+      final result = await _apiService.requestRefund(
+        orderId.toString(),
+        productId,
+        reason,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result != null 
+                ? 'Refund request submitted successfully'
+                : 'Failed to submit refund request'),
+            backgroundColor: result != null ? Colors.green : Colors.red,
+          ),
+        );
+        // Refresh orders to show updated status
+        _fetchOrders();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 }
