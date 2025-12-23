@@ -240,6 +240,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         autofillHints: const [AutofillHints.password],
                                     obscureText: _obscurePassword,
                                     style: TextStyle(fontSize: 16),
+                                    onFieldSubmitted: (_) => _login(),
                         decoration: InputDecoration(
                           labelText: 'Password',
                                       labelStyle: TextStyle(

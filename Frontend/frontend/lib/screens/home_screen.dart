@@ -13,6 +13,7 @@ import 'product_manager_page.dart';
 import 'review_moderation_page.dart';
 import 'admin_home.dart';
 import 'customer_home.dart';
+import 'refund_management_page.dart';
 // Product Detail Page
 
 // ==========================================
@@ -348,6 +349,18 @@ class _StoreLayoutState extends State<StoreLayout> {
                             );
                           },
                         ),
+                      if (userRole == 'sales_manager')
+                        _buildDrawerItem(
+                          icon: Icons.money_off_rounded,
+                          title: 'Refund Management',
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => RefundManagementPage()),
+                            );
+                          },
+                        ),
                       if (userRole == 'customer')
                         _buildDrawerItem(
                           icon: Icons.person_rounded,
@@ -467,6 +480,7 @@ class _StoreLayoutState extends State<StoreLayout> {
   Widget _buildHeader() {
     final authService = AuthService();
     final isLoggedIn = authService.isLoggedIn;
+    final userRole = authService.userRole;
     String displayName = authService.userName;
     return Container(
       decoration: BoxDecoration(
@@ -551,6 +565,19 @@ class _StoreLayoutState extends State<StoreLayout> {
                         fontSize: 16,
                       ),
                     ),
+                    if (userRole != null && userRole != 'customer') ...[
+                      SizedBox(height: 2),
+                      Text(
+                        userRole.replaceAll('_', ' ').split(' ').map((word) => 
+                          word[0].toUpperCase() + word.substring(1)
+                        ).join(' '),
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
                 SizedBox(width: 16),
@@ -684,6 +711,13 @@ class _StoreLayoutState extends State<StoreLayout> {
                           builder: (context) => ReviewModerationPage(),
                         ),
                       );
+                    } else if (value == 'refunds') {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => RefundManagementPage(),
+                        ),
+                      );
                     } else if (value == 'info') {
                       // Navigate to Info (Placeholder)
                     } else if (value == 'logout') {
@@ -735,6 +769,24 @@ class _StoreLayoutState extends State<StoreLayout> {
                               ),
                               SizedBox(width: 8),
                               Text('Review Moderation'),
+                            ],
+                          ),
+                        ),
+                      ],
+                      // Show Sales Manager options only for sales managers
+                      if (role == 'sales_manager') ...[
+                        const PopupMenuDivider(),
+                        const PopupMenuItem<String>(
+                          value: 'refunds',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.money_off,
+                                size: 18,
+                                color: Colors.orange,
+                              ),
+                              SizedBox(width: 8),
+                              Text('Refund Management'),
                             ],
                           ),
                         ),
