@@ -61,7 +61,7 @@ class _CustomerInformationPageState extends State<CustomerInformationPage> {
             _emailController.text = userInfo['email'] ?? '';
             _addressController.text = userInfo['address'] ?? '';
             _taxIDController.text = userInfo['taxID'] ?? '';
-            _passwordController.text = ''; // Don't show password
+            _passwordController.text = userInfo['password'] ?? ''; // Show password from database
             _loading = false;
           });
         } else {
@@ -155,7 +155,19 @@ class _CustomerInformationPageState extends State<CustomerInformationPage> {
     }
   }
   
-  Widget _buildInfoField(String label, String value, {bool isSensitive = false, bool showToggle = false}) {
+  Widget _buildInfoField(String label, String value, {bool isSensitive = false}) {
+    // Determine if this field should show/hide based on toggle state
+    bool isVisible = false;
+    if (isSensitive) {
+      if (label.contains('Tax ID')) {
+        isVisible = _showTaxID;
+      } else if (label.contains('Password')) {
+        isVisible = _showPassword;
+      }
+    } else {
+      isVisible = true; // Non-sensitive fields are always visible
+    }
+    
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12.0),
       child: Column(
@@ -182,17 +194,17 @@ class _CustomerInformationPageState extends State<CustomerInformationPage> {
               children: [
                 Expanded(
                   child: Text(
-                    value.isEmpty ? 'Not set' : (isSensitive && !showToggle ? '••••••••' : value),
+                    value.isEmpty ? 'Not set' : (isSensitive && !isVisible ? '••••••••' : value),
                     style: TextStyle(
                       fontSize: 16,
                       color: value.isEmpty ? Colors.grey.shade400 : Colors.black87,
                     ),
                   ),
                 ),
-                if (isSensitive && showToggle)
+                if (isSensitive)
                   IconButton(
                     icon: Icon(
-                      showToggle ? Icons.visibility : Icons.visibility_off,
+                      isVisible ? Icons.visibility : Icons.visibility_off,
                       color: Colors.grey.shade600,
                     ),
                     onPressed: () {
@@ -213,7 +225,19 @@ class _CustomerInformationPageState extends State<CustomerInformationPage> {
     );
   }
   
-  Widget _buildEditableField(String label, TextEditingController controller, {bool isSensitive = false, bool showToggle = false, String? Function(String?)? validator}) {
+  Widget _buildEditableField(String label, TextEditingController controller, {bool isSensitive = false, String? Function(String?)? validator}) {
+    // Determine if this field should show/hide based on toggle state
+    bool isVisible = false;
+    if (isSensitive) {
+      if (label.contains('Tax ID')) {
+        isVisible = _showTaxID;
+      } else if (label.contains('Password')) {
+        isVisible = _showPassword;
+      }
+    } else {
+      isVisible = true; // Non-sensitive fields are always visible
+    }
+    
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12.0),
       child: Column(
@@ -231,7 +255,7 @@ class _CustomerInformationPageState extends State<CustomerInformationPage> {
           const SizedBox(height: 6),
           TextFormField(
             controller: controller,
-            obscureText: isSensitive && !showToggle,
+            obscureText: isSensitive && !isVisible,
             validator: validator,
             decoration: InputDecoration(
               filled: true,
@@ -248,10 +272,10 @@ class _CustomerInformationPageState extends State<CustomerInformationPage> {
                 borderRadius: BorderRadius.circular(8),
                 borderSide: const BorderSide(color: Color(0xFFFF7733), width: 2),
               ),
-              suffixIcon: isSensitive && showToggle
+              suffixIcon: isSensitive
                   ? IconButton(
                       icon: Icon(
-                        showToggle ? Icons.visibility : Icons.visibility_off,
+                        isVisible ? Icons.visibility : Icons.visibility_off,
                         color: Colors.grey.shade600,
                       ),
                       onPressed: () {
@@ -374,8 +398,8 @@ class _CustomerInformationPageState extends State<CustomerInformationPage> {
                           _buildInfoField('Name', _userInfo!['name'] ?? '', isSensitive: false),
                           _buildInfoField('Email', _userInfo!['email'] ?? '', isSensitive: false),
                           _buildInfoField('Home Address', _userInfo!['address'] ?? '', isSensitive: false),
-                          _buildInfoField('Tax ID', _userInfo!['taxID'] ?? '', isSensitive: true, showToggle: _showTaxID),
-                          _buildInfoField('Password', '••••••••', isSensitive: true, showToggle: _showPassword),
+                          _buildInfoField('Tax ID', _userInfo!['taxID'] ?? '', isSensitive: true),
+                          _buildInfoField('Password', _userInfo!['password'] ?? '', isSensitive: true),
                         ] else ...[
                           _buildInfoField('Customer ID', _userInfo!['user_id']?.toString() ?? _userInfo!['id']?.toString() ?? 'N/A'),
                           _buildEditableField(
@@ -400,13 +424,11 @@ class _CustomerInformationPageState extends State<CustomerInformationPage> {
                             'Tax ID',
                             _taxIDController,
                             isSensitive: true,
-                            showToggle: _showTaxID,
                           ),
                           _buildEditableField(
                             'Password (leave empty to keep current)',
                             _passwordController,
                             isSensitive: true,
-                            showToggle: _showPassword,
                             validator: (value) {
                               if (value != null && value.isNotEmpty && value.length < 6) {
                                 return 'Password must be at least 6 characters';
