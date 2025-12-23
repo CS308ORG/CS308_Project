@@ -658,10 +658,29 @@ app.get('/users/:uid/orders', authenticate, async (req, res) => {
                         if (productDoc.exists) productDetails = productDoc.data();
                     } catch (e) { }
                 }
+                
+                // Check if there's a refund for this item
+                let refundStatus = null;
+                try {
+                    const refundSnapshot = await db.collection('refunds')
+                        .where('order_id', '==', orderId)
+                        .where('product_id', '==', productId)
+                        .limit(1)
+                        .get();
+                    
+                    if (!refundSnapshot.empty) {
+                        const refundData = refundSnapshot.docs[0].data();
+                        refundStatus = refundData.status; // 'requested', 'refunded', 'rejected'
+                    }
+                } catch (e) {
+                    // Ignore refund lookup errors
+                }
+                
                 enrichedItems.push({
                     ...productDetails,
                     ...item,
-                    name: item.name || productDetails.name || 'Unknown Product'
+                    name: item.name || productDetails.name || 'Unknown Product',
+                    refund_status: refundStatus || item.refund_status || null
                 });
             }
 
@@ -975,6 +994,476 @@ app.post('/logout', authenticate, async (req, res) => {
         return res.status(500).json({ error: 'Failed to logout' });
     }
 });
+// ============================================
+// REFUND ENDPOINTS
+// ============================================
+
+// POST /refunds/request - Customer requests refund
+app.post('/refunds/request', authenticate, async (req, res) => {
+    try {
+        const { order_id, product_id, reason } = req.body;
+        const userId = req.user.uid || req.user.user_id;
+
+        if (!order_id || !product_id) {
+            return res.status(400).json({ error: 'order_id and product_id are required' });
+        }
+
+        // Get order details
+        const orderRef = db.collection('orders').doc(String(order_id));
+        const orderDoc = await orderRef.get();
+
+        if (!orderDoc.exists) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+
+        const orderData = orderDoc.data();
+        const orderUserId = orderData.user_id;
+        
+        // Verify order belongs to user
+        if (String(orderUserId) !== String(userId) && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Unauthorized - order does not belong to user' });
+        }
+
+        // Check order status is delivered
+        if (orderData.status !== 'delivered') {
+            return res.status(400).json({ error: 'Refund can only be requested for delivered orders' });
+        }
+
+        // Check 30-day window from PURCHASE DATE (not delivery date)
+        const purchaseDate = orderData.created_at 
+            ? (orderData.created_at.toDate ? orderData.created_at.toDate() : new Date(orderData.created_at))
+            : (orderData.date ? new Date(orderData.date) : new Date());
+        
+        const daysSincePurchase = (Date.now() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24);
+        if (daysSincePurchase > 30) {
+            return res.status(400).json({ error: 'Refund can only be requested within 30 days of purchase' });
+        }
+
+        // Find the product in order items
+        const items = orderData.items || [];
+        const orderItem = items.find(item => 
+            String(item.product_id) === String(product_id)
+        );
+
+        if (!orderItem) {
+            return res.status(404).json({ error: 'Product not found in this order' });
+        }
+
+        // Check if refund already exists for this order+product
+        const existingRefunds = await db.collection('refunds')
+            .where('order_id', '==', Number(order_id))
+            .where('product_id', '==', Number(product_id))
+            .where('status', 'in', ['requested', 'approved'])
+            .get();
+
+        if (!existingRefunds.empty) {
+            return res.status(400).json({ error: 'Refund already requested for this product' });
+        }
+
+        // Get next refund ID
+        const countersRef = db.collection('meta').doc('counters');
+        let refundId = 1;
+        await db.runTransaction(async (tx) => {
+            const snap = await tx.get(countersRef);
+            if (snap.exists && typeof snap.data().nextRefundId === 'number') {
+                refundId = snap.data().nextRefundId;
+                tx.update(countersRef, { nextRefundId: refundId + 1 });
+            } else {
+                refundId = 1;
+                tx.set(countersRef, { nextRefundId: 2 }, { merge: true });
+            }
+        });
+
+        // Create refund request
+        // Store the original unit_price to preserve purchase-time discount
+        const refundData = {
+            refund_id: refundId,
+            order_id: Number(order_id),
+            product_id: Number(product_id),
+            user_id: userId,
+            quantity: orderItem.quantity || 1,
+            unit_price: orderItem.unit_price || 0, // Original price paid (with discount)
+            total_refund_amount: (orderItem.unit_price || 0) * (orderItem.quantity || 1),
+            reason: reason || '',
+            status: 'requested',
+            requested_at: FieldValue.serverTimestamp(),
+            purchase_date: purchaseDate.toISOString(),
+            days_since_purchase: Math.floor(daysSincePurchase)
+        };
+
+        await db.collection('refunds').doc(String(refundId)).set(refundData);
+
+        return res.status(201).json({
+            success: true,
+            message: 'Refund request submitted',
+            refund: refundData
+        });
+    } catch (err) {
+        console.error('Refund request error:', err);
+        return res.status(500).json({ error: 'Failed to process refund request', details: err.message });
+    }
+});
+
+// GET /refunds/count - Get count of all refunds (for checking existing refunds)
+app.get('/refunds/count', authenticate, authorize(['sales_manager', 'admin']), async (req, res) => {
+    try {
+        const snapshot = await db.collection('refunds').get();
+        return res.json({ 
+            total_count: snapshot.size,
+            by_status: {
+                requested: snapshot.docs.filter(d => d.data().status === 'requested').length,
+                refunded: snapshot.docs.filter(d => d.data().status === 'refunded').length,
+                rejected: snapshot.docs.filter(d => d.data().status === 'rejected').length
+            }
+        });
+    } catch (err) {
+        console.error('Get refunds count error:', err);
+        return res.status(500).json({ error: 'Failed to get refunds count' });
+    }
+});
+
+// GET /refunds - Sales manager views all refund requests
+app.get('/refunds', authenticate, authorize(['sales_manager', 'admin']), async (req, res) => {
+    try {
+        const { status } = req.query;
+        let query = db.collection('refunds');
+
+        if (status) {
+            query = query.where('status', '==', status);
+        }
+
+        // Note: If using orderBy with where, Firestore requires a composite index
+        // For now, we'll fetch all and sort in memory if needed
+        let snapshot;
+        try {
+            snapshot = await query.orderBy('requested_at', 'desc').get();
+        } catch (e) {
+            // If index doesn't exist, fetch without orderBy and sort in memory
+            snapshot = await query.get();
+        }
+        let refunds = [];
+
+        for (const doc of snapshot.docs) {
+            const refundData = doc.data();
+            
+            // Enrich with product and order details
+            try {
+                const productDoc = await db.collection('products').doc(String(refundData.product_id)).get();
+                const orderDoc = await db.collection('orders').doc(String(refundData.order_id)).get();
+                const userDoc = await db.collection('users').doc(String(refundData.user_id)).get();
+
+                refunds.push({
+                    id: doc.id,
+                    ...refundData,
+                    product: productDoc.exists ? productDoc.data() : null,
+                    order: orderDoc.exists ? orderDoc.data() : null,
+                    user: userDoc.exists ? {
+                        name: userDoc.data().name,
+                        email: userDoc.data().email,
+                        address: userDoc.data().address
+                    } : null,
+                    requested_at: (() => {
+                        try {
+                            if (refundData.requested_at && typeof refundData.requested_at.toDate === 'function') {
+                                return refundData.requested_at.toDate().toISOString();
+                            } else if (refundData.requested_at) {
+                                const dateStr = refundData.requested_at.toString();
+                                if (dateStr && !dateStr.includes('T')) {
+                                    const date = new Date(dateStr);
+                                    if (!isNaN(date.getTime())) {
+                                        const now = new Date();
+                                        date.setHours(now.getHours());
+                                        date.setMinutes(now.getMinutes());
+                                        date.setSeconds(now.getSeconds());
+                                        return date.toISOString();
+                                    }
+                                }
+                                return dateStr;
+                            }
+                            return new Date().toISOString();
+                        } catch (e) {
+                            return new Date().toISOString();
+                        }
+                    })(),
+                    approved_at: (() => {
+                        try {
+                            if (refundData.approved_at && typeof refundData.approved_at.toDate === 'function') {
+                                return refundData.approved_at.toDate().toISOString();
+                            } else if (refundData.approved_at) {
+                                const dateStr = refundData.approved_at.toString();
+                                if (dateStr && !dateStr.includes('T')) {
+                                    const date = new Date(dateStr);
+                                    if (!isNaN(date.getTime())) {
+                                        const now = new Date();
+                                        date.setHours(now.getHours());
+                                        date.setMinutes(now.getMinutes());
+                                        date.setSeconds(now.getSeconds());
+                                        return date.toISOString();
+                                    }
+                                }
+                                return dateStr;
+                            }
+                            return null;
+                        } catch (e) {
+                            return null;
+                        }
+                    })()
+                });
+            } catch (e) {
+                console.error(`Error enriching refund ${doc.id}:`, e);
+                // Fallback: add refund with minimal data
+                let requestedAtStr;
+                try {
+                    if (refundData.requested_at && typeof refundData.requested_at.toDate === 'function') {
+                        requestedAtStr = refundData.requested_at.toDate().toISOString();
+                    } else {
+                        requestedAtStr = refundData.requested_at?.toString() || new Date().toISOString();
+                    }
+                } catch (e2) {
+                    requestedAtStr = new Date().toISOString();
+                }
+
+                refunds.push({
+                    id: doc.id,
+                    refund_id: refundData.refund_id || doc.id,
+                    order_id: refundData.order_id || 'N/A',
+                    product_id: refundData.product_id || 'N/A',
+                    user_id: refundData.user_id || 'N/A',
+                    quantity: refundData.quantity || 1,
+                    unit_price: refundData.unit_price || 0,
+                    total_refund_amount: refundData.total_refund_amount || 0,
+                    reason: refundData.reason || '',
+                    status: refundData.status || 'requested',
+                    requested_at: requestedAtStr,
+                    approved_at: null,
+                    product: null,
+                    order: null,
+                    user: { name: 'Unknown', email: 'N/A', address: 'N/A' }
+                });
+            }
+        }
+
+        // Sort by requested_at (date and hour) from newest to oldest
+        // Every refund should have a requested_at field
+        refunds.sort((a, b) => {
+            let dateA = 0;
+            let dateB = 0;
+            
+            // Use requested_at for sorting (required field)
+            if (a.requested_at) {
+                try {
+                    const date = new Date(a.requested_at);
+                    if (!isNaN(date.getTime())) {
+                        dateA = date.getTime();
+                    }
+                } catch (e) {
+                    console.error(`Error parsing requested_at for refund ${a.id}:`, e);
+                    dateA = 0;
+                }
+            }
+            
+            if (b.requested_at) {
+                try {
+                    const date = new Date(b.requested_at);
+                    if (!isNaN(date.getTime())) {
+                        dateB = date.getTime();
+                    }
+                } catch (e) {
+                    console.error(`Error parsing requested_at for refund ${b.id}:`, e);
+                    dateB = 0;
+                }
+            }
+            
+            // Descending order: newest first (larger timestamp comes first)
+            return dateB - dateA;
+        });
+
+        return res.json({ refunds });
+    } catch (err) {
+        console.error('Get refunds error:', err);
+        return res.status(500).json({ error: 'Failed to fetch refunds' });
+    }
+});
+
+// PUT /refunds/:id/approve - Sales manager approves refund
+app.put('/refunds/:id/approve', authenticate, authorize(['sales_manager', 'admin']), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { decision, reason } = req.body;
+        const decisionNormalized = (decision || 'approved').toLowerCase();
+
+        if (!['approved', 'rejected'].includes(decisionNormalized)) {
+            return res.status(400).json({ error: 'Invalid decision. Must be "approved" or "rejected"' });
+        }
+
+        const refundRef = db.collection('refunds').doc(id);
+        const refundDoc = await refundRef.get();
+
+        if (!refundDoc.exists) {
+            return res.status(404).json({ error: 'Refund not found' });
+        }
+
+        const refundData = refundDoc.data();
+
+        if (refundData.status !== 'requested') {
+            return res.status(400).json({ error: `Refund is already ${refundData.status}` });
+        }
+
+        // Use transaction for atomic operations
+        await db.runTransaction(async (tx) => {
+            if (decisionNormalized === 'approved') {
+                // Restore product stock
+                const productRef = db.collection('products').doc(String(refundData.product_id));
+                const productDoc = await tx.get(productRef);
+
+                if (productDoc.exists) {
+                    tx.update(productRef, {
+                        quantity_in_stock: FieldValue.increment(refundData.quantity || 1)
+                    });
+                }
+
+                // Update refund status
+                tx.update(refundRef, {
+                    status: 'refunded',
+                    approved_by: req.user.uid || req.user.user_id,
+                    approved_at: FieldValue.serverTimestamp(),
+                    approval_reason: reason || null
+                });
+
+                // Update order status to show refund was accepted
+                const orderRef = db.collection('orders').doc(String(refundData.order_id));
+                const orderDoc = await tx.get(orderRef);
+                if (orderDoc.exists) {
+                    const orderData = orderDoc.data();
+                    const items = orderData.items || [];
+                    // Mark the specific item as refunded
+                    const updatedItems = items.map(item => {
+                        if (String(item.product_id) === String(refundData.product_id)) {
+                            return { ...item, refund_status: 'refunded' };
+                        }
+                        return item;
+                    });
+                    tx.update(orderRef, {
+                        items: updatedItems,
+                        refund_status: 'refunded',
+                        updated_at: FieldValue.serverTimestamp()
+                    });
+                }
+            } else {
+                // Rejected
+                tx.update(refundRef, {
+                    status: 'rejected',
+                    approved_by: req.user.uid || req.user.user_id,
+                    approved_at: FieldValue.serverTimestamp(),
+                    approval_reason: reason || null
+                });
+
+                // Update order to show refund was rejected
+                const orderRef = db.collection('orders').doc(String(refundData.order_id));
+                const orderDoc = await tx.get(orderRef);
+                if (orderDoc.exists) {
+                    const orderData = orderDoc.data();
+                    const items = orderData.items || [];
+                    // Mark the specific item as refund rejected
+                    const updatedItems = items.map(item => {
+                        if (String(item.product_id) === String(refundData.product_id)) {
+                            return { ...item, refund_status: 'rejected' };
+                        }
+                        return item;
+                    });
+                    tx.update(orderRef, {
+                        items: updatedItems,
+                        refund_status: 'rejected',
+                        updated_at: FieldValue.serverTimestamp()
+                    });
+                }
+            }
+        });
+
+        // Send email notification if approved
+        if (decisionNormalized === 'approved') {
+            try {
+                const userDoc = await db.collection('users').doc(String(refundData.user_id)).get();
+                const userEmail = userDoc.exists ? userDoc.data().email : null;
+                const userName = userDoc.exists ? userDoc.data().name : 'Customer';
+
+                if (userEmail && emailTransporter) {
+                    const productDoc = await db.collection('products').doc(String(refundData.product_id)).get();
+                    const productName = productDoc.exists ? productDoc.data().name : 'Product';
+
+                    const mailOptions = {
+                        from: process.env.EMAIL_USER || 'noreply@cs308shop.com',
+                        to: userEmail,
+                        subject: `Refund Approved for Order #${refundData.order_id}`,
+                        html: `
+                            <h2>Refund Approved</h2>
+                            <p>Dear ${userName},</p>
+                            <p>Your refund request for <strong>${productName}</strong> from Order #${refundData.order_id} has been approved.</p>
+                            <p><strong>Refund Amount:</strong> $${refundData.total_refund_amount.toFixed(2)}</p>
+                            <p><strong>Quantity:</strong> ${refundData.quantity}</p>
+                            <p>The refunded amount will be credited back to your original payment method.</p>
+                            ${reason ? `<p><strong>Note:</strong> ${reason}</p>` : ''}
+                            <br>
+                            <p>Thank you for your patience.</p>
+                            <p>Best regards,<br>CS308 Shop Team</p>
+                        `
+                    };
+
+                    await emailTransporter.sendMail(mailOptions);
+                    console.log(`Refund approval email sent to ${userEmail}`);
+                }
+            } catch (emailErr) {
+                console.error('Refund email error:', emailErr);
+                // Don't fail the request if email fails
+            }
+        }
+
+        const updatedRefund = await refundRef.get();
+        return res.json({
+            success: true,
+            message: `Refund ${decisionNormalized}`,
+            refund: updatedRefund.data()
+        });
+    } catch (err) {
+        console.error('Approve refund error:', err);
+        return res.status(500).json({ error: 'Failed to process refund approval', details: err.message });
+    }
+});
+
+// GET /users/:uid/refunds - Customer views their refund requests
+app.get('/users/:uid/refunds', authenticate, async (req, res) => {
+    const uid = req.params.uid;
+    if (String(req.user.uid) !== String(uid) && req.user.role !== 'admin' && req.user.role !== 'sales_manager') {
+        return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    try {
+        const snapshot = await db.collection('refunds')
+            .where('user_id', '==', uid)
+            .orderBy('requested_at', 'desc')
+            .get();
+
+        const refunds = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                requested_at: data.requested_at?.toDate?.() 
+                    ? data.requested_at.toDate().toISOString()
+                    : (data.requested_at || new Date().toISOString()),
+                approved_at: data.approved_at?.toDate?.() 
+                    ? data.approved_at.toDate().toISOString()
+                    : (data.approved_at || null)
+            };
+        });
+
+        return res.json({ refunds });
+    } catch (err) {
+        console.error('Get user refunds error:', err);
+        return res.status(500).json({ error: 'Failed to fetch user refunds' });
+    }
+});
+
 require('./auth-routes')(app, db);
 
 const PORT = process.env.PORT || 3000;
