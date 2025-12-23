@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'login_screen.dart';
 import 'refund_management_page.dart';
+import 'price_management_page.dart';
+import 'invoice_management_page.dart';
+import 'revenue_management_page.dart';
 
 class SalesManagerHome extends StatelessWidget {
   final String username;
@@ -59,6 +62,74 @@ class SalesManagerHome extends StatelessWidget {
                 ),
               ),
               SizedBox(height: 48),
+              
+              // Revenue & Profit Analysis Button
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => RevenueManagementPage(),
+                    ),
+                  );
+                },
+                icon: Icon(Icons.trending_up),
+                label: Text('Revenue & Profit Analysis'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFFFF7733),
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  textStyle: TextStyle(fontSize: 18),
+                  minimumSize: Size(300, 60),
+                ),
+              ),
+              SizedBox(height: 16),
+              
+              // Price & Discount Management Button (11.1, 11.2, 11.3)
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => PriceManagementPage(),
+                    ),
+                  );
+                },
+                icon: Icon(Icons.price_change),
+                label: Text('Price & Discount Management'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFFFF7733),
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  textStyle: TextStyle(fontSize: 18),
+                  minimumSize: Size(300, 60),
+                ),
+              ),
+              SizedBox(height: 16),
+              
+              // Invoice Management Button (11.4)
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => InvoiceManagementPage(),
+                    ),
+                  );
+                },
+                icon: Icon(Icons.receipt_long),
+                label: Text('Invoice Management'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFFFF7733),
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  textStyle: TextStyle(fontSize: 18),
+                  minimumSize: Size(300, 60),
+                ),
+              ),
+              SizedBox(height: 16),
+              
+              // Refund Management Button
               ElevatedButton.icon(
                 onPressed: () {
                   Navigator.push(
@@ -75,6 +146,7 @@ class SalesManagerHome extends StatelessWidget {
                   foregroundColor: Colors.white,
                   padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                   textStyle: TextStyle(fontSize: 18),
+                  minimumSize: Size(300, 60),
                 ),
               ),
             ],
