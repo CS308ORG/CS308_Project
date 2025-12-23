@@ -15,6 +15,9 @@ import 'review_moderation_page.dart';
 import 'admin_home.dart';
 import 'customer_home.dart';
 import 'refund_management_page.dart';
+import 'price_management_page.dart';
+import 'invoice_management_page.dart';
+import 'revenue_management_page.dart';
 import 'wishlist_page.dart';
 import 'customer_information_page.dart';
 // Product Detail Page
@@ -99,11 +102,16 @@ class _StoreLayoutState extends State<StoreLayout> {
   List<dynamic> _suggestions = [];
   bool _showSuggestions = false;
   Set<String> _hoveredCategories = {};
+  
+  // Notification state (11.3)
+  int _unreadNotificationCount = 0;
+  List<dynamic> _notifications = [];
 
   @override
   void initState() {
     super.initState();
     _loadDataForSuggestions();
+    _loadNotifications();
     _searchFocusNode.addListener(() {
       if (_searchFocusNode.hasFocus) {
         _onSearchChanged(_searchController.text);
@@ -115,6 +123,157 @@ class _StoreLayoutState extends State<StoreLayout> {
         });
       }
     });
+  }
+
+  // Load notifications for logged-in user (11.3)
+  Future<void> _loadNotifications() async {
+    final authService = AuthService();
+    if (!authService.isLoggedIn) return;
+    
+    final userId = authService.currentUser?['id']?.toString() ?? 
+                   authService.currentUser?['user_id']?.toString();
+    if (userId == null) return;
+    
+    try {
+      final count = await _apiService.getUnreadNotificationCount(userId);
+      final notifications = await _apiService.getNotifications(userId);
+      if (mounted) {
+        setState(() {
+          _unreadNotificationCount = count;
+          _notifications = notifications;
+        });
+      }
+    } catch (e) {
+      print('Error loading notifications: $e');
+    }
+  }
+
+  // Show notifications dialog (11.3)
+  void _showNotificationsDialog(BuildContext context) async {
+    final authService = AuthService();
+    final userId = authService.currentUser?['id']?.toString() ?? 
+                   authService.currentUser?['user_id']?.toString();
+    
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('🔔 Notifications'),
+            if (_notifications.isNotEmpty)
+              TextButton(
+                onPressed: () async {
+                  if (userId != null) {
+                    await _apiService.markAllNotificationsAsRead(userId);
+                    _loadNotifications();
+                  }
+                  Navigator.pop(dialogContext);
+                },
+                child: Text('Mark all read', style: TextStyle(fontSize: 12)),
+              ),
+          ],
+        ),
+        content: Container(
+          width: 400,
+          height: 400,
+          child: _notifications.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.notifications_none, size: 64, color: Colors.grey),
+                      SizedBox(height: 16),
+                      Text('No notifications', style: TextStyle(color: Colors.grey)),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: _notifications.length,
+                  itemBuilder: (context, index) {
+                    final notification = _notifications[index];
+                    final isRead = notification['is_read'] == true;
+                    return Card(
+                      color: isRead ? Colors.white : Color(0xFFFFF5E6),
+                      child: ListTile(
+                        leading: Icon(
+                          notification['type'] == 'price_drop' 
+                              ? Icons.local_offer 
+                              : Icons.notifications,
+                          color: Color(0xFFFF7733),
+                        ),
+                        title: Text(
+                          notification['title'] ?? 'Notification',
+                          style: TextStyle(
+                            fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
+                          ),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              notification['message'] ?? '',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              _formatNotificationDate(notification['created_at']),
+                              style: TextStyle(fontSize: 10, color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                        onTap: () async {
+                          // Mark as read
+                          if (!isRead && notification['id'] != null) {
+                            await _apiService.markNotificationAsRead(notification['id']);
+                            _loadNotifications();
+                          }
+                          Navigator.pop(dialogContext);
+                          // Navigate to product if it's a price drop notification
+                          if (notification['product_id'] != null) {
+                            final product = _allProducts.firstWhere(
+                              (p) => p['product_id'] == notification['product_id'] || 
+                                     p['id'] == notification['product_id'].toString(),
+                              orElse: () => null,
+                            );
+                            if (product != null) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => ProductDetail(product: product),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatNotificationDate(String? dateStr) {
+    if (dateStr == null) return '';
+    try {
+      final date = DateTime.parse(dateStr);
+      final now = DateTime.now();
+      final diff = now.difference(date);
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+      if (diff.inHours < 24) return '${diff.inHours}h ago';
+      if (diff.inDays < 7) return '${diff.inDays}d ago';
+      return '${date.day}/${date.month}/${date.year}';
+    } catch (e) {
+      return '';
+    }
   }
 
   @override
@@ -383,7 +542,40 @@ class _StoreLayoutState extends State<StoreLayout> {
                             );
                           },
                         ),
-                      if (userRole == 'sales_manager')
+                      if (userRole == 'sales_manager') ...[
+                        _buildDrawerItem(
+                          icon: Icons.trending_up_rounded,
+                          title: 'Revenue & Profit Analysis',
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => RevenueManagementPage()),
+                            );
+                          },
+                        ),
+                        _buildDrawerItem(
+                          icon: Icons.price_change_rounded,
+                          title: 'Price & Discount Management',
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => PriceManagementPage()),
+                            );
+                          },
+                        ),
+                        _buildDrawerItem(
+                          icon: Icons.receipt_long_rounded,
+                          title: 'Invoice Management',
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => InvoiceManagementPage()),
+                            );
+                          },
+                        ),
                         _buildDrawerItem(
                           icon: Icons.money_off_rounded,
                           title: 'Refund Management',
@@ -395,6 +587,7 @@ class _StoreLayoutState extends State<StoreLayout> {
                             );
                           },
                         ),
+                      ],
                       if (userRole == 'customer')
                         _buildDrawerItem(
                           icon: Icons.person_rounded,
@@ -614,7 +807,46 @@ class _StoreLayoutState extends State<StoreLayout> {
                     ],
                   ],
                 ),
-                SizedBox(width: 16),
+              SizedBox(width: 16),
+            ],
+
+              // 1.5 Notification Bell (11.3)
+              if (isLoggedIn) ...[
+                Stack(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.notifications, size: 28),
+                      color: const Color(0xFFFF7733),
+                      onPressed: () => _showNotificationsDialog(context),
+                    ),
+                    if (_unreadNotificationCount > 0)
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 20,
+                            minHeight: 20,
+                          ),
+                          child: Text(
+                            '$_unreadNotificationCount',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                SizedBox(width: 8),
               ],
 
               // 2. Cart Logo
@@ -752,6 +984,27 @@ class _StoreLayoutState extends State<StoreLayout> {
                           builder: (context) => RefundManagementPage(),
                         ),
                       );
+                    } else if (value == 'revenue') {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => RevenueManagementPage(),
+                        ),
+                      );
+                    } else if (value == 'price_management') {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => PriceManagementPage(),
+                        ),
+                      );
+                    } else if (value == 'invoices') {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => InvoiceManagementPage(),
+                        ),
+                      );
                     } else if (value == 'info') {
                       Navigator.push(
                         context,
@@ -836,6 +1089,48 @@ class _StoreLayoutState extends State<StoreLayout> {
                       // Show Sales Manager options only for sales managers
                       if (role == 'sales_manager') ...[
                         const PopupMenuDivider(),
+                        const PopupMenuItem<String>(
+                          value: 'revenue',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.trending_up,
+                                size: 18,
+                                color: Colors.orange,
+                              ),
+                              SizedBox(width: 8),
+                              Text('Revenue & Profit Analysis'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem<String>(
+                          value: 'price_management',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.price_change,
+                                size: 18,
+                                color: Colors.orange,
+                              ),
+                              SizedBox(width: 8),
+                              Text('Price & Discount Management'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem<String>(
+                          value: 'invoices',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.receipt_long,
+                                size: 18,
+                                color: Colors.orange,
+                              ),
+                              SizedBox(width: 8),
+                              Text('Invoice Management'),
+                            ],
+                          ),
+                        ),
                         const PopupMenuItem<String>(
                           value: 'refunds',
                           child: Row(
