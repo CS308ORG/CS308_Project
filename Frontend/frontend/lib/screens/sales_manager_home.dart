@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'login_screen.dart';
+import 'refund_management_page.dart';
 
 class SalesManagerHome extends StatelessWidget {
   final String username;
@@ -55,6 +56,25 @@ class SalesManagerHome extends StatelessWidget {
                 child: Text(
                   'Role: $role',
                   style: TextStyle(fontSize: 18, color: Colors.white),
+                ),
+              ),
+              SizedBox(height: 48),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => RefundManagementPage(),
+                    ),
+                  );
+                },
+                icon: Icon(Icons.money_off),
+                label: Text('Manage Refunds'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFFFF7733),
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  textStyle: TextStyle(fontSize: 18),
                 ),
               ),
             ],

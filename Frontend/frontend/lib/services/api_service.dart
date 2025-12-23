@@ -262,4 +262,115 @@ class ApiService {
       return null;
     }
   }
+
+  // --- REFUND METHODS ---
+
+  // Request refund for a product in an order
+  Future<Map<String, dynamic>?> requestRefund(
+    String orderId,
+    dynamic productId,
+    String reason,
+  ) async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return null;
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/refunds/request'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'order_id': orderId,
+          'product_id': productId,
+          'reason': reason,
+        }),
+      );
+
+      if (response.statusCode == 201) {
+        return jsonDecode(response.body);
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception(error['error'] ?? 'Failed to request refund');
+      }
+    } catch (e) {
+      print("Error requesting refund: $e");
+      rethrow;
+    }
+  }
+
+  // Get user's refund requests
+  Future<List<dynamic>> getUserRefunds(String uid) async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return [];
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/users/$uid/refunds'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body)['refunds'] ?? [];
+      }
+    } catch (e) {
+      print("Error fetching user refunds: $e");
+    }
+    return [];
+  }
+
+  // Get all refunds (Sales Manager)
+  Future<List<dynamic>> getAllRefunds({String? status}) async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return [];
+
+      String url = '$baseUrl/refunds';
+      if (status != null) {
+        url += '?status=$status';
+      }
+
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body)['refunds'] ?? [];
+      }
+    } catch (e) {
+      print("Error fetching refunds: $e");
+    }
+    return [];
+  }
+
+  // Approve or reject refund (Sales Manager)
+  Future<bool> processRefund(
+    String refundId,
+    String decision, {
+    String? reason,
+  }) async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return false;
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/refunds/$refundId/approve'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'decision': decision,
+          if (reason != null && reason.isNotEmpty) 'reason': reason,
+        }),
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print("Error processing refund: $e");
+      return false;
+    }
+  }
 }
