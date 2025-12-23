@@ -170,7 +170,14 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   String _formatDate(String? dateStr) {
     if (dateStr == null) return "-";
     try {
-      final date = DateTime.parse(dateStr);
+      DateTime date;
+      // Ensure UTC is properly recognized and converted to local time (UTC+3 for Turkey)
+      if (dateStr.endsWith('Z') || dateStr.contains('+00:00')) {
+        date = DateTime.parse(dateStr.replaceAll('+00:00', 'Z')).toLocal();
+      } else {
+        final parsed = DateTime.parse(dateStr);
+        date = parsed.isUtc ? parsed.toLocal() : parsed;
+      }
       return "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
     } catch (e) {
       return "-";
@@ -181,7 +188,16 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     if (dateValue == null) return "Not set";
     try {
       String dateStr = dateValue.toString();
-      final date = DateTime.parse(dateStr);
+      DateTime date;
+      // Ensure UTC is properly recognized and converted to local time (UTC+3 for Turkey)
+      if (dateStr.endsWith('Z') || dateStr.contains('+00:00')) {
+        // Explicitly parse as UTC
+        date = DateTime.parse(dateStr.replaceAll('+00:00', 'Z')).toLocal();
+      } else {
+        // Try parsing and convert to local
+        final parsed = DateTime.parse(dateStr);
+        date = parsed.isUtc ? parsed.toLocal() : parsed;
+      }
       final monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       final monthName = monthNames[date.month - 1];
       return "${date.day} $monthName ${date.year}, ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}:${date.second.toString().padLeft(2, '0')}";
@@ -353,6 +369,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     final dateValue = order['created_at'] ?? order['date'];
     final dateFormatted = _formatDateWithTime(dateValue);
     final address = order['delivery_address'] ?? 'N/A';
+    final orderId = order['order_id']?.toString() ?? order['id']?.toString() ?? 'N/A';
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -372,6 +389,41 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Order #$orderId',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFFF7733),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _getStatusColor(statusRaw).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: _getStatusColor(statusRaw).withOpacity(0.5),
+                    ),
+                  ),
+                  child: Text(
+                    statusFormatted,
+                    style: TextStyle(
+                      color: _getStatusColor(statusRaw),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
             Row(
               children: [
                 const Icon(
@@ -670,45 +722,19 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
               ),
             ),
             const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Order Date & Time",
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade500,
-                      ),
-                    ),
-                    Text(
-                      dateFormatted,
-                      style: const TextStyle(fontWeight: FontWeight.w500),
-                    ),
-                  ],
+                Text(
+                  "Order Date & Time",
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade500,
+                  ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _getStatusColor(statusRaw).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: _getStatusColor(statusRaw).withOpacity(0.5),
-                    ),
-                  ),
-                  child: Text(
-                    statusFormatted,
-                    style: TextStyle(
-                      color: _getStatusColor(statusRaw),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
-                  ),
+                Text(
+                  dateFormatted,
+                  style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
               ],
             ),

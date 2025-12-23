@@ -663,19 +663,8 @@ app.get('/users/:uid/orders', authenticate, async (req, res) => {
             const orderData = orderDoc.data();
             const orderId = orderData.order_id;
             
-            // Backfill missing delivery_address
-            let deliveryAddress = orderData.delivery_address || orderData.deliveryAddress || 'N/A';
-            if (deliveryAddress === 'N/A' || !deliveryAddress || deliveryAddress.trim() === '') {
-                // Update the order in database with current user address
-                deliveryAddress = userCurrentAddress;
-                try {
-                    await db.collection('orders').doc(String(orderId)).update({
-                        delivery_address: userCurrentAddress
-                    });
-                } catch (updateErr) {
-                    console.error(`Error updating order ${orderId} address:`, updateErr);
-                }
-            }
+            // Get delivery_address without updating the order (to prevent unintended side effects)
+            let deliveryAddress = orderData.delivery_address || orderData.deliveryAddress || userCurrentAddress;
 
             let items = [];
             if (Array.isArray(orderData.items) && orderData.items.length) {
@@ -721,9 +710,24 @@ app.get('/users/:uid/orders', authenticate, async (req, res) => {
                 });
             }
 
-            const createdAt = orderData.created_at && typeof orderData.created_at.toDate === 'function'
-                ? orderData.created_at.toDate().toISOString()
-                : (orderData.date || new Date().toISOString());
+            // Safely extract created_at timestamp - never use current date as fallback to prevent date changes
+            let createdAt;
+            if (orderData.created_at && typeof orderData.created_at.toDate === 'function') {
+                createdAt = orderData.created_at.toDate().toISOString();
+            } else if (orderData.date) {
+                // If date exists, try to parse it
+                if (typeof orderData.date.toDate === 'function') {
+                    createdAt = orderData.date.toDate().toISOString();
+                } else if (typeof orderData.date === 'string') {
+                    createdAt = orderData.date;
+                } else {
+                    // Keep original date value as-is, don't replace with current time
+                    createdAt = orderData.date.toString();
+                }
+            } else {
+                // Only use current date if absolutely no date exists (shouldn't happen for existing orders)
+                createdAt = new Date().toISOString();
+            }
             orders.push({
                 ...orderData,
                 items: enrichedItems,

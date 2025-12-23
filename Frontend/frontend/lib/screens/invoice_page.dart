@@ -572,14 +572,27 @@ class InvoicePage extends StatelessWidget {
       DateTime parsed;
       
       if (date is DateTime) {
-        parsed = date;
+        parsed = date.isUtc ? date.toLocal() : date;
       } else if (date is String) {
-        parsed = DateTime.parse(date);
+        // Ensure UTC is properly recognized and converted to local time (UTC+3 for Turkey)
+        String dateStr = date;
+        if (dateStr.endsWith('Z') || dateStr.contains('+00:00')) {
+          parsed = DateTime.parse(dateStr.replaceAll('+00:00', 'Z')).toLocal();
+        } else {
+          final temp = DateTime.parse(dateStr);
+          parsed = temp.isUtc ? temp.toLocal() : temp;
+        }
       } else if (date is Map && date['_seconds'] != null) {
-        // Firestore Timestamp format
-        parsed = DateTime.fromMillisecondsSinceEpoch((date['_seconds'] as int) * 1000);
+        // Firestore Timestamp format - explicitly UTC
+        parsed = DateTime.fromMillisecondsSinceEpoch((date['_seconds'] as int) * 1000, isUtc: true).toLocal();
       } else if (date != null) {
-        parsed = DateTime.parse(date.toString());
+        String dateStr = date.toString();
+        if (dateStr.endsWith('Z') || dateStr.contains('+00:00')) {
+          parsed = DateTime.parse(dateStr.replaceAll('+00:00', 'Z')).toLocal();
+        } else {
+          final temp = DateTime.parse(dateStr);
+          parsed = temp.isUtc ? temp.toLocal() : temp;
+        }
       } else {
         parsed = DateTime.now();
       }
