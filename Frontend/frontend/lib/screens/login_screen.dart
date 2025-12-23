@@ -1,10 +1,16 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'signup_screen.dart';
 import '../services/auth_service.dart';
+import '../services/api_service.dart';
 
 class LoginScreen extends StatefulWidget {
+  final Map<String, dynamic>? productToAddToWishlist;
+  
+  const LoginScreen({Key? key, this.productToAddToWishlist}) : super(key: key);
+  
   @override
   _LoginScreenState createState() => _LoginScreenState();
 }
@@ -57,6 +63,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
     if (success) {
       if (!mounted) return;
+      
+      // If there's a product to add to wishlist, add it after login
+      if (widget.productToAddToWishlist != null) {
+        await _addProductToWishlistAfterLogin();
+      }
+      
       Navigator.pop(context, true);
     } else {
       setState(() {
@@ -64,6 +76,33 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         _errorMessage =
             'Email or password is incorrect, or you have not an account yet.';
       });
+    }
+  }
+  
+  Future<void> _addProductToWishlistAfterLogin() async {
+    try {
+      String? uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) {
+        final currentUser = AuthService().currentUser;
+        uid = currentUser?['id']?.toString() ?? currentUser?['user_id']?.toString();
+      }
+      
+      if (uid == null) return;
+      
+      final apiService = ApiService();
+      final productId = (widget.productToAddToWishlist!['id'] ?? widget.productToAddToWishlist!['product_id']).toString();
+      
+      // Check if product is already in wishlist
+      final wishlist = await apiService.getWishlist(uid);
+      final isAlreadyInWishlist = wishlist.any((p) => (p['id'] ?? p['product_id']).toString() == productId);
+      
+      // Only add if not already in wishlist
+      if (!isAlreadyInWishlist) {
+        await apiService.addToWishlist(uid, productId);
+      }
+    } catch (e) {
+      print("Error adding product to wishlist after login: $e");
+      // Don't show error to user, just log it
     }
   }
 

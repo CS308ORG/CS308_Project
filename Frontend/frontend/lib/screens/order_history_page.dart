@@ -88,32 +88,50 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
         }
 
         // --- UPDATED SORTING LOGIC ---
-        // 1. Date (Newest to Oldest)
-        // 2. Price (Highest to Lowest)
+        // Sort by date and time (Newest to Oldest)
         fetchedOrders.sort((a, b) {
-          final dateAStr = a['date'] as String?;
-          final dateBStr = b['date'] as String?;
-          final priceA = (a['total_amount'] as num?)?.toDouble() ?? 0.0;
-          final priceB = (b['total_amount'] as num?)?.toDouble() ?? 0.0;
-
-          // Date check
-          if (dateAStr != null && dateBStr != null) {
-            final dateA = DateTime.tryParse(dateAStr);
-            final dateB = DateTime.tryParse(dateBStr);
-            if (dateA != null && dateB != null) {
-              int dateComparison = dateB.compareTo(
-                dateA,
-              ); // B vs A = Descending
-              if (dateComparison != 0) return dateComparison;
+          DateTime? dateA;
+          DateTime? dateB;
+          
+          // Try to get created_at first (most accurate with time)
+          try {
+            if (a['created_at'] != null) {
+              final dateStr = a['created_at'].toString();
+              dateA = DateTime.tryParse(dateStr);
             }
-          } else if (dateAStr != null) {
-            return -1; // A has date, A comes first
-          } else if (dateBStr != null) {
-            return 1; // B has date, B comes first
+            if (b['created_at'] != null) {
+              final dateStr = b['created_at'].toString();
+              dateB = DateTime.tryParse(dateStr);
+            }
+          } catch (e) {
+            print('Error parsing created_at: $e');
           }
-
-          // Price check (if dates equal or missing)
-          return priceB.compareTo(priceA); // B vs A = Descending
+          
+          // Fallback to date field if created_at is missing
+          if (dateA == null && a['date'] != null) {
+            try {
+              final dateStr = a['date'].toString();
+              dateA = DateTime.tryParse(dateStr);
+            } catch (e) {}
+          }
+          if (dateB == null && b['date'] != null) {
+            try {
+              final dateStr = b['date'].toString();
+              dateB = DateTime.tryParse(dateStr);
+            } catch (e) {}
+          }
+          
+          // Compare dates (newest first - descending order)
+          if (dateA != null && dateB != null) {
+            // Use millisecondsSinceEpoch for accurate comparison
+            final diff = dateB.millisecondsSinceEpoch - dateA.millisecondsSinceEpoch;
+            return diff > 0 ? 1 : (diff < 0 ? -1 : 0);
+          } else if (dateA != null) {
+            return -1; // A has date, comes first
+          } else if (dateB != null) {
+            return 1; // B has date, comes first
+          }
+          return 0; // Both missing dates
         });
 
         if (mounted) {
@@ -156,6 +174,19 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       return "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
     } catch (e) {
       return "-";
+    }
+  }
+
+  String _formatDateWithTime(dynamic dateValue) {
+    if (dateValue == null) return "Not set";
+    try {
+      String dateStr = dateValue.toString();
+      final date = DateTime.parse(dateStr);
+      final monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      final monthName = monthNames[date.month - 1];
+      return "${date.day} $monthName ${date.year}, ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}:${date.second.toString().padLeft(2, '0')}";
+    } catch (e) {
+      return "Invalid date";
     }
   }
 
@@ -318,7 +349,9 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     final totalAmount = (order['total_amount'] as num?)?.toDouble() ?? 0.0;
     final statusRaw = order['status'] as String?;
     final statusFormatted = _formatStatus(statusRaw);
-    final dateFormatted = _formatDate(order['date']);
+    // Use created_at if available (has time), otherwise fallback to date
+    final dateValue = order['created_at'] ?? order['date'];
+    final dateFormatted = _formatDateWithTime(dateValue);
     final address = order['delivery_address'] ?? 'N/A';
 
     return Container(
@@ -406,10 +439,32 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                             },
                           );
                           
+                          // Check wishlist status before navigating
+                          bool? wishlistStatus;
+                          if (AuthService().isLoggedIn) {
+                            try {
+                              String? uid = FirebaseAuth.instance.currentUser?.uid;
+                              if (uid == null) {
+                                final currentUser = AuthService().currentUser;
+                                uid = currentUser?['id']?.toString() ?? currentUser?['user_id']?.toString();
+                              }
+                              if (uid != null) {
+                                final apiService = ApiService();
+                                final wishlist = await apiService.getWishlist(uid);
+                                final productId = (product['id'] ?? product['product_id']).toString();
+                                wishlistStatus = wishlist.any((p) => (p['id'] ?? p['product_id']).toString() == productId);
+                              }
+                            } catch (e) {
+                              print("Error checking wishlist before navigation: $e");
+                            }
+                          }
                           final result = await Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => ProductDetail(product: product),
+                              builder: (context) => ProductDetail(
+                                product: product,
+                                initialWishlistStatus: wishlistStatus,
+                              ),
                             ),
                           );
                           // If we return from product detail, refresh eligibility
@@ -420,6 +475,25 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                           }
                         } catch (e) {
                           // If product not found, still navigate with available data
+                          // Check wishlist status before navigating
+                          bool? wishlistStatus;
+                          if (AuthService().isLoggedIn) {
+                            try {
+                              String? uid = FirebaseAuth.instance.currentUser?.uid;
+                              if (uid == null) {
+                                final currentUser = AuthService().currentUser;
+                                uid = currentUser?['id']?.toString() ?? currentUser?['user_id']?.toString();
+                              }
+                              if (uid != null) {
+                                final apiService = ApiService();
+                                final wishlist = await apiService.getWishlist(uid);
+                                final productId = pid.toString();
+                                wishlistStatus = wishlist.any((p) => (p['id'] ?? p['product_id']).toString() == productId);
+                              }
+                            } catch (e2) {
+                              print("Error checking wishlist before navigation: $e2");
+                            }
+                          }
                           await Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -430,6 +504,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                                   'name': name,
                                   ...item,
                                 },
+                                initialWishlistStatus: wishlistStatus,
                               ),
                             ),
                           );
@@ -602,7 +677,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "Order Date",
+                      "Order Date & Time",
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey.shade500,
@@ -637,10 +712,108 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                 ),
               ],
             ),
+            // Cancel order button (only for processing orders)
+            if (statusRaw?.toLowerCase() == 'processing') ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _cancelOrder(order),
+                  icon: const Icon(Icons.cancel_outlined, size: 20),
+                  label: const Text(
+                    'Cancel Order',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade50,
+                    foregroundColor: Colors.red.shade700,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(color: Colors.red.shade300, width: 1.5),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _cancelOrder(Map<String, dynamic> order) async {
+    final orderId = order['order_id']?.toString() ?? order['id']?.toString();
+    if (orderId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error: Order ID not found')),
+      );
+      return;
+    }
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel Order'),
+        content: const Text('Are you sure you want to cancel this order? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('No'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Yes, Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final success = await _apiService.cancelOrder(orderId);
+      if (mounted) {
+        Navigator.pop(context); // Close loading dialog
+        
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Order cancelled successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          // Refresh orders
+          _fetchOrders();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to cancel order. Please try again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Color _getStatusColor(String? status) {

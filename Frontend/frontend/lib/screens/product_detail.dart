@@ -9,7 +9,13 @@ import 'login_screen.dart';
 
 class ProductDetail extends StatefulWidget {
   final Map<String, dynamic> product;
-  const ProductDetail({Key? key, required this.product}) : super(key: key);
+  final bool? initialWishlistStatus;
+  
+  const ProductDetail({
+    Key? key, 
+    required this.product,
+    this.initialWishlistStatus,
+  }) : super(key: key);
 
   @override
   _ProductDetailState createState() => _ProductDetailState();
@@ -26,14 +32,60 @@ class _ProductDetailState extends State<ProductDetail> {
   Map<String, dynamic>? _myPendingReview;
   bool _isLoadingReviews = true;
   bool _canReview = false;
+  
+  // Wishlist status
+  bool? _isInWishlist;
+  bool _wishlistChanged = false; // Track if wishlist was modified
 
   @override
   void initState() {
     super.initState();
+    // Set initial wishlist status immediately if provided
+    if (widget.initialWishlistStatus != null) {
+      _isInWishlist = widget.initialWishlistStatus;
+    }
     _loadReviews();
+    // Only check if initial status wasn't provided
+    if (widget.initialWishlistStatus == null) {
+      _checkWishlistStatus();
+    }
     _commentController.addListener(() {
       setState(() {});
     });
+  }
+  
+  Future<void> _checkWishlistStatus() async {
+    if (!AuthService().isLoggedIn) {
+      setState(() => _isInWishlist = false);
+      return;
+    }
+    
+    String? uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      final currentUser = AuthService().currentUser;
+      uid = currentUser?['id']?.toString() ?? currentUser?['user_id']?.toString();
+    }
+    
+    if (uid == null) {
+      setState(() => _isInWishlist = false);
+      return;
+    }
+    
+    try {
+      final api = ApiService();
+      final wishlist = await api.getWishlist(uid);
+      final productId = (widget.product['product_id'] ?? widget.product['id']).toString();
+      if (mounted) {
+        setState(() {
+          _isInWishlist = wishlist.any((p) => (p['id'] ?? p['product_id']).toString() == productId);
+        });
+      }
+    } catch (e) {
+      print("Error checking wishlist: $e");
+      if (mounted) {
+        setState(() => _isInWishlist = false);
+      }
+    }
   }
 
   // Refresh eligibility check - call this when returning from order history
@@ -123,14 +175,20 @@ class _ProductDetailState extends State<ProductDetail> {
     final int currentCartQty = cartItem['quantity'] ?? 0;
     final bool canAddToCart = currentCartQty < maxAllowed;
 
-    return StoreLayout(
-      body: SingleChildScrollView(
+    return WillPopScope(
+      onWillPop: () async {
+        // Return true if wishlist was changed
+        Navigator.pop(context, _wishlistChanged);
+        return false; // Prevent default pop
+      },
+      child: StoreLayout(
+        body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildImageCarousel(imageUrl, title, isOutOfStock),
+              _buildImageCarousel(imageUrl, title, isOutOfStock, widget.product, _isInWishlist),
               const SizedBox(height: 24),
               _buildProductInfo(
                 title,
@@ -208,6 +266,7 @@ class _ProductDetailState extends State<ProductDetail> {
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -425,7 +484,7 @@ class _ProductDetailState extends State<ProductDetail> {
     }
   }
 
-  Widget _buildImageCarousel(String? url, String title, bool isOutOfStock) {
+  Widget _buildImageCarousel(String? url, String title, bool isOutOfStock, Map<String, dynamic> product, bool? initialWishlistStatus) {
     return Container(
       height: 400,
       decoration: BoxDecoration(
@@ -468,9 +527,23 @@ class _ProductDetailState extends State<ProductDetail> {
                   )
                 : const Icon(Icons.computer, size: 100, color: Colors.grey),
           ),
+          // Wishlist heart icon (always visible)
+          Positioned(
+            top: 16,
+            right: 16,
+            child: _WishlistHeartButton(
+              product: product,
+              initialWishlistStatus: initialWishlistStatus,
+              onWishlistChanged: () {
+                setState(() {
+                  _wishlistChanged = true;
+                });
+              },
+            ),
+          ),
           if (isOutOfStock)
             Positioned(
-              top: 16,
+              bottom: 16,
               right: 16,
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -496,12 +569,31 @@ class _ProductDetailState extends State<ProductDetail> {
               left: 16,
               top: 0,
               bottom: 0,
-              child: IconButton(
-                icon: const Icon(
-                  Icons.arrow_back_ios,
-                  color: Color(0xFFFF7733),
+              child: Center(
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(
+                      Icons.arrow_back_ios,
+                      color: Color(0xFFFF7733),
+                      size: 18,
+                    ),
+                    onPressed: () => setState(() => _currentImageIndex--),
+                  ),
                 ),
-                onPressed: () => setState(() => _currentImageIndex--),
               ),
             ),
           if (_currentImageIndex < _productImages.length - 1)
@@ -509,12 +601,31 @@ class _ProductDetailState extends State<ProductDetail> {
               right: 16,
               top: 0,
               bottom: 0,
-              child: IconButton(
-                icon: const Icon(
-                  Icons.arrow_forward_ios,
-                  color: Color(0xFFFF7733),
+              child: Center(
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(
+                      Icons.arrow_forward_ios,
+                      color: Color(0xFFFF7733),
+                      size: 18,
+                    ),
+                    onPressed: () => setState(() => _currentImageIndex++),
+                  ),
                 ),
-                onPressed: () => setState(() => _currentImageIndex++),
               ),
             ),
         ],
@@ -620,6 +731,170 @@ class _ProductDetailState extends State<ProductDetail> {
         border: OutlineInputBorder(),
         filled: true,
         fillColor: Colors.white,
+      ),
+    );
+  }
+}
+
+// Wishlist Heart Button Widget
+class _WishlistHeartButton extends StatefulWidget {
+  final Map<String, dynamic> product;
+  final bool? initialWishlistStatus;
+  final VoidCallback? onWishlistChanged;
+  
+  const _WishlistHeartButton({
+    required this.product,
+    this.initialWishlistStatus,
+    this.onWishlistChanged,
+  });
+  
+  @override
+  _WishlistHeartButtonState createState() => _WishlistHeartButtonState();
+}
+
+class _WishlistHeartButtonState extends State<_WishlistHeartButton> {
+  final ApiService _apiService = ApiService();
+  late bool _isInWishlist;
+  bool _loading = false;
+  
+  @override
+  void initState() {
+    super.initState();
+    // Use initial status if provided, otherwise check asynchronously
+    _isInWishlist = widget.initialWishlistStatus ?? false;
+    // Only check if initial status wasn't provided
+    if (widget.initialWishlistStatus == null) {
+      _checkWishlistStatus();
+    }
+  }
+  
+  Future<void> _checkWishlistStatus() async {
+    if (!AuthService().isLoggedIn) return;
+    
+    String? uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      final currentUser = AuthService().currentUser;
+      uid = currentUser?['id']?.toString() ?? currentUser?['user_id']?.toString();
+    }
+    
+    if (uid == null) return;
+    
+    try {
+      final wishlist = await _apiService.getWishlist(uid);
+      final productId = (widget.product['id'] ?? widget.product['product_id']).toString();
+      if (mounted) {
+        setState(() {
+          _isInWishlist = wishlist.any((p) => (p['id'] ?? p['product_id']).toString() == productId);
+        });
+      }
+    } catch (e) {
+      print("Error checking wishlist: $e");
+    }
+  }
+  
+  Future<void> _toggleWishlist() async {
+    if (_loading) return;
+    
+    if (!AuthService().isLoggedIn) {
+      // Navigate to login with product to add to wishlist
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => LoginScreen(productToAddToWishlist: widget.product),
+        ),
+      );
+      // Refresh wishlist status after returning from login
+      if (result == true && mounted) {
+        _checkWishlistStatus();
+        // Also refresh the parent's wishlist status
+        if (widget.initialWishlistStatus != null) {
+          // Trigger a rebuild to update the button
+          setState(() {
+            _isInWishlist = true; // Assume it was added
+          });
+        }
+      }
+      return;
+    }
+    
+    setState(() => _loading = true);
+    
+    String? uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      final currentUser = AuthService().currentUser;
+      uid = currentUser?['id']?.toString() ?? currentUser?['user_id']?.toString();
+    }
+    
+    if (uid == null) {
+      setState(() => _loading = false);
+      return;
+    }
+    
+    final productId = (widget.product['id'] ?? widget.product['product_id']).toString();
+    
+    try {
+      if (_isInWishlist) {
+        final success = await _apiService.removeFromWishlist(uid, productId);
+        if (success) {
+          setState(() {
+            _isInWishlist = false;
+            _loading = false;
+          });
+          // Notify parent that wishlist changed
+          widget.onWishlistChanged?.call();
+        } else {
+          setState(() => _loading = false);
+        }
+      } else {
+        final success = await _apiService.addToWishlist(uid, productId);
+        if (success) {
+          setState(() {
+            _isInWishlist = true;
+            _loading = false;
+          });
+          // Notify parent that wishlist changed
+          widget.onWishlistChanged?.call();
+        } else {
+          setState(() => _loading = false);
+        }
+      }
+    } catch (e) {
+      setState(() => _loading = false);
+      print("Error toggling wishlist: $e");
+    }
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: _toggleWishlist,
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.9),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: _loading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Icon(
+                  _isInWishlist ? Icons.favorite : Icons.favorite_border,
+                  color: _isInWishlist ? Colors.red : Colors.grey.shade600,
+                  size: 20,
+                ),
+        ),
       ),
     );
   }
