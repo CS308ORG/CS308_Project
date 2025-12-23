@@ -500,4 +500,265 @@ class ApiService {
       return false;
     }
   }
+
+  // --- SALES MANAGER METHODS ---
+
+  // Get all products for sales manager
+  Future<List<dynamic>> getAllProducts() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/products'));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['products'] ?? [];
+      }
+    } catch (e) {
+      print("Error fetching products: $e");
+    }
+    return [];
+  }
+
+  // 11.1 - Set product price (Sales Manager)
+  Future<Map<String, dynamic>?> setProductPrice(
+    String productId,
+    double price,
+  ) async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return null;
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/products/$productId/price'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'price': price}),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception(error['error'] ?? 'Failed to update price');
+      }
+    } catch (e) {
+      print("Error setting product price: $e");
+      rethrow;
+    }
+  }
+
+  // 11.2 - Set discount on product (Sales Manager)
+  // 11.3 - System notifies wishlist users automatically
+  Future<Map<String, dynamic>?> setProductDiscount(
+    String productId,
+    double discountRate,
+  ) async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return null;
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/products/$productId/discount'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'discount_rate': discountRate}),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception(error['error'] ?? 'Failed to apply discount');
+      }
+    } catch (e) {
+      print("Error setting product discount: $e");
+      rethrow;
+    }
+  }
+
+  // Remove discount from product
+  Future<Map<String, dynamic>?> removeProductDiscount(String productId) async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return null;
+
+      final response = await http.delete(
+        Uri.parse('$baseUrl/products/$productId/discount'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception(error['error'] ?? 'Failed to remove discount');
+      }
+    } catch (e) {
+      print("Error removing product discount: $e");
+      rethrow;
+    }
+  }
+
+  // --- NOTIFICATION METHODS (11.3 - In-App Notifications) ---
+
+  // Get user's notifications
+  Future<List<dynamic>> getNotifications(String uid) async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return [];
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/users/$uid/notifications'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['notifications'] ?? [];
+      }
+    } catch (e) {
+      print("Error fetching notifications: $e");
+    }
+    return [];
+  }
+
+  // Get unread notification count
+  Future<int> getUnreadNotificationCount(String uid) async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return 0;
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/users/$uid/notifications/unread-count'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['count'] ?? 0;
+      }
+    } catch (e) {
+      print("Error fetching unread count: $e");
+    }
+    return 0;
+  }
+
+  // Mark notification as read
+  Future<bool> markNotificationAsRead(String notificationId) async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return false;
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/notifications/$notificationId/read'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print("Error marking notification as read: $e");
+      return false;
+    }
+  }
+
+  // Mark all notifications as read
+  Future<bool> markAllNotificationsAsRead(String uid) async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return false;
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/users/$uid/notifications/read-all'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print("Error marking all notifications as read: $e");
+      return false;
+    }
+  }
+
+  // --- INVOICE MANAGEMENT METHODS (11.4) ---
+
+  // Get invoices with date range filter
+  Future<List<dynamic>> getInvoices({
+    String? startDate,
+    String? endDate,
+    String? status,
+  }) async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return [];
+
+      String url = '$baseUrl/invoices?';
+      if (startDate != null) url += 'start_date=$startDate&';
+      if (endDate != null) url += 'end_date=$endDate&';
+      if (status != null) url += 'status=$status&';
+      url = url.replaceAll(RegExp(r'[&?]$'), '');
+
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['invoices'] ?? [];
+      }
+    } catch (e) {
+      print("Error fetching invoices: $e");
+    }
+    return [];
+  }
+
+  // Download invoice as PDF
+  Future<http.Response?> downloadInvoicePDF(String orderId) async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return null;
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/invoices/$orderId/pdf'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        return response;
+      }
+    } catch (e) {
+      print("Error downloading invoice PDF: $e");
+    }
+    return null;
+  }
+
+  // --- REVENUE & PROFIT/LOSS METHODS ---
+
+  // Get revenue and profit/loss for date range
+  Future<Map<String, dynamic>?> getRevenue({
+    required String startDate,
+    required String endDate,
+  }) async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return null;
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/revenue?start_date=$startDate&end_date=$endDate'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception(error['error'] ?? 'Failed to get revenue data');
+      }
+    } catch (e) {
+      print("Error fetching revenue: $e");
+      rethrow;
+    }
+  }
 }

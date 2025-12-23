@@ -1788,6 +1788,679 @@ app.put('/orders/:orderId/cancel', authenticate, async (req, res) => {
 });
 
 // ============================================
+// SALES MANAGER - PRICE & DISCOUNT ENDPOINTS
+// ============================================
+
+// GET /products - Get all products (for sales manager)
+app.get('/products', async (req, res) => {
+    try {
+        const snapshot = await db.collection('products').get();
+        const products = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+        return res.json({ products });
+    } catch (err) {
+        console.error('Get products error:', err);
+        return res.status(500).json({ error: 'Failed to fetch products' });
+    }
+});
+
+// PUT /products/:id/price - Sales manager sets product price (11.1)
+app.put('/products/:id/price', authenticate, authorize(['sales_manager', 'admin']), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { price } = req.body;
+
+        if (price === undefined || price === null) {
+            return res.status(400).json({ error: 'price is required' });
+        }
+
+        const newPrice = Number(price);
+        if (isNaN(newPrice) || newPrice < 0) {
+            return res.status(400).json({ error: 'Invalid price value' });
+        }
+
+        const productRef = db.collection('products').doc(String(id));
+        const productDoc = await productRef.get();
+
+        if (!productDoc.exists) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        const oldPrice = productDoc.data().price || 0;
+
+        await productRef.update({
+            price: newPrice,
+            original_price: productDoc.data().original_price || oldPrice, // Keep original if exists
+            price_updated_at: FieldValue.serverTimestamp(),
+            price_updated_by: req.user.uid || req.user.user_id
+        });
+
+        const updatedDoc = await productRef.get();
+        return res.json({
+            success: true,
+            message: 'Product price updated successfully',
+            product: { id: updatedDoc.id, ...updatedDoc.data() }
+        });
+    } catch (err) {
+        console.error('Update price error:', err);
+        return res.status(500).json({ error: 'Failed to update product price', details: err.message });
+    }
+});
+
+// PUT /products/:id/discount - Sales manager sets discount (11.2)
+// System calculates new price and notifies wishlist users (11.3)
+app.put('/products/:id/discount', authenticate, authorize(['sales_manager', 'admin']), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { discount_rate } = req.body;
+
+        if (discount_rate === undefined || discount_rate === null) {
+            return res.status(400).json({ error: 'discount_rate is required (0-100)' });
+        }
+
+        const discountRate = Number(discount_rate);
+        if (isNaN(discountRate) || discountRate < 0 || discountRate > 100) {
+            return res.status(400).json({ error: 'discount_rate must be between 0 and 100' });
+        }
+
+        const productRef = db.collection('products').doc(String(id));
+        const productDoc = await productRef.get();
+
+        if (!productDoc.exists) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        const productData = productDoc.data();
+        const originalPrice = productData.original_price || productData.price || 0;
+        
+        // Calculate new discounted price
+        const newPrice = discountRate > 0 
+            ? Number((originalPrice * (1 - discountRate / 100)).toFixed(2))
+            : originalPrice;
+
+        await productRef.update({
+            price: newPrice,
+            original_price: originalPrice,
+            discount_rate: discountRate,
+            discount_updated_at: FieldValue.serverTimestamp(),
+            discount_updated_by: req.user.uid || req.user.user_id
+        });
+
+        // 11.3 - Create in-app notifications for users whose wishlist includes this discounted product
+        let notifiedUsers = [];
+        if (discountRate > 0) {
+            try {
+                // Find users who have this product in their wishlist
+                const usersSnapshot = await db.collection('users').get();
+                const productIdStr = String(id);
+                
+                for (const userDoc of usersSnapshot.docs) {
+                    const userData = userDoc.data();
+                    const wishlist = userData.wishlist || [];
+                    
+                    // Check if product is in wishlist (check both string and number)
+                    const hasInWishlist = wishlist.some(wid => 
+                        String(wid) === productIdStr || wid == id
+                    );
+                    
+                    if (hasInWishlist) {
+                        // Create in-app notification
+                        const notificationData = {
+                            user_id: userData.user_id || userDoc.id,
+                            type: 'price_drop',
+                            title: '🎉 Price Drop Alert!',
+                            message: `${productData.name} is now ${discountRate}% off! Was $${originalPrice.toFixed(2)}, now $${newPrice.toFixed(2)}`,
+                            product_id: Number(id),
+                            product_name: productData.name,
+                            original_price: originalPrice,
+                            new_price: newPrice,
+                            discount_rate: discountRate,
+                            is_read: false,
+                            created_at: FieldValue.serverTimestamp()
+                        };
+
+                        await db.collection('notifications').add(notificationData);
+                        notifiedUsers.push(userData.user_id || userDoc.id);
+                        console.log(`In-app notification created for user ${userData.user_id || userDoc.id} for product ${id}`);
+                    }
+                }
+            } catch (notifyErr) {
+                console.error('Error creating notifications:', notifyErr);
+            }
+        }
+
+        const updatedDoc = await productRef.get();
+        return res.json({
+            success: true,
+            message: `Discount applied successfully. ${notifiedUsers.length} wishlist user(s) notified.`,
+            product: { id: updatedDoc.id, ...updatedDoc.data() },
+            notified_users_count: notifiedUsers.length
+        });
+    } catch (err) {
+        console.error('Apply discount error:', err);
+        return res.status(500).json({ error: 'Failed to apply discount', details: err.message });
+    }
+});
+
+// DELETE /products/:id/discount - Remove discount from product
+app.delete('/products/:id/discount', authenticate, authorize(['sales_manager', 'admin']), async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const productRef = db.collection('products').doc(String(id));
+        const productDoc = await productRef.get();
+
+        if (!productDoc.exists) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        const productData = productDoc.data();
+        const originalPrice = productData.original_price || productData.price;
+
+        await productRef.update({
+            price: originalPrice,
+            discount_rate: 0,
+            discount_updated_at: FieldValue.serverTimestamp(),
+            discount_updated_by: req.user.uid || req.user.user_id
+        });
+
+        const updatedDoc = await productRef.get();
+        return res.json({
+            success: true,
+            message: 'Discount removed successfully',
+            product: { id: updatedDoc.id, ...updatedDoc.data() }
+        });
+    } catch (err) {
+        console.error('Remove discount error:', err);
+        return res.status(500).json({ error: 'Failed to remove discount', details: err.message });
+    }
+});
+
+// ============================================
+// NOTIFICATION ENDPOINTS (11.3 - In-App Notifications)
+// ============================================
+
+// GET /users/:uid/notifications - Get user's notifications
+app.get('/users/:uid/notifications', authenticate, async (req, res) => {
+    try {
+        const { uid } = req.params;
+        const userId = req.user.uid || req.user.user_id;
+        
+        // Verify user can only access their own notifications
+        if (String(uid) !== String(userId) && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+        
+        const uidQuery = /^\d+$/.test(uid) ? parseInt(uid) : uid;
+        
+        let snapshot;
+        try {
+            snapshot = await db.collection('notifications')
+                .where('user_id', '==', uidQuery)
+                .orderBy('created_at', 'desc')
+                .limit(50)
+                .get();
+        } catch (e) {
+            // If index doesn't exist, fetch without orderBy
+            snapshot = await db.collection('notifications')
+                .where('user_id', '==', uidQuery)
+                .get();
+        }
+        
+        const notifications = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                created_at: data.created_at?.toDate?.() 
+                    ? data.created_at.toDate().toISOString()
+                    : (data.created_at || new Date().toISOString())
+            };
+        });
+        
+        // Sort by created_at descending if we couldn't use orderBy
+        notifications.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        
+        return res.json({ notifications });
+    } catch (err) {
+        console.error('Get notifications error:', err);
+        return res.status(500).json({ error: 'Failed to fetch notifications' });
+    }
+});
+
+// GET /users/:uid/notifications/unread-count - Get unread notification count
+app.get('/users/:uid/notifications/unread-count', authenticate, async (req, res) => {
+    try {
+        const { uid } = req.params;
+        const userId = req.user.uid || req.user.user_id;
+        
+        if (String(uid) !== String(userId) && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+        
+        const uidQuery = /^\d+$/.test(uid) ? parseInt(uid) : uid;
+        
+        const snapshot = await db.collection('notifications')
+            .where('user_id', '==', uidQuery)
+            .where('is_read', '==', false)
+            .get();
+        
+        return res.json({ count: snapshot.size });
+    } catch (err) {
+        console.error('Get unread count error:', err);
+        return res.status(500).json({ error: 'Failed to get unread count' });
+    }
+});
+
+// PUT /notifications/:id/read - Mark notification as read
+app.put('/notifications/:id/read', authenticate, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const notificationRef = db.collection('notifications').doc(id);
+        const notificationDoc = await notificationRef.get();
+        
+        if (!notificationDoc.exists) {
+            return res.status(404).json({ error: 'Notification not found' });
+        }
+        
+        // Verify ownership
+        const notificationData = notificationDoc.data();
+        const userId = req.user.uid || req.user.user_id;
+        if (String(notificationData.user_id) !== String(userId) && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+        
+        await notificationRef.update({
+            is_read: true,
+            read_at: FieldValue.serverTimestamp()
+        });
+        
+        return res.json({ success: true, message: 'Notification marked as read' });
+    } catch (err) {
+        console.error('Mark notification read error:', err);
+        return res.status(500).json({ error: 'Failed to mark notification as read' });
+    }
+});
+
+// PUT /users/:uid/notifications/read-all - Mark all notifications as read
+app.put('/users/:uid/notifications/read-all', authenticate, async (req, res) => {
+    try {
+        const { uid } = req.params;
+        const userId = req.user.uid || req.user.user_id;
+        
+        if (String(uid) !== String(userId) && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+        
+        const uidQuery = /^\d+$/.test(uid) ? parseInt(uid) : uid;
+        
+        const snapshot = await db.collection('notifications')
+            .where('user_id', '==', uidQuery)
+            .where('is_read', '==', false)
+            .get();
+        
+        const batch = db.batch();
+        snapshot.docs.forEach(doc => {
+            batch.update(doc.ref, { 
+                is_read: true, 
+                read_at: FieldValue.serverTimestamp() 
+            });
+        });
+        
+        await batch.commit();
+        
+        return res.json({ success: true, message: `${snapshot.size} notifications marked as read` });
+    } catch (err) {
+        console.error('Mark all read error:', err);
+        return res.status(500).json({ error: 'Failed to mark notifications as read' });
+    }
+});
+
+// ============================================
+// REVENUE & PROFIT/LOSS ENDPOINTS (Sales Manager)
+// ============================================
+
+// GET /revenue - Calculate revenue and profit/loss between dates
+app.get('/revenue', authenticate, authorize(['sales_manager', 'admin']), async (req, res) => {
+    try {
+        const { start_date, end_date } = req.query;
+        
+        if (!start_date || !end_date) {
+            return res.status(400).json({ error: 'start_date and end_date are required (ISO format)' });
+        }
+        
+        const startDate = new Date(start_date);
+        const endDate = new Date(end_date);
+        
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+            return res.status(400).json({ error: 'Invalid date format. Use ISO format (YYYY-MM-DD)' });
+        }
+        
+        // Set start date to beginning of day (00:00:00)
+        startDate.setHours(0, 0, 0, 0);
+        // Set end date to end of day (23:59:59)
+        endDate.setHours(23, 59, 59, 999);
+        
+        // Get all delivered orders (we'll filter by date in JavaScript to avoid index issues)
+        let ordersSnapshot;
+        try {
+            ordersSnapshot = await db.collection('orders')
+                .where('status', '==', 'delivered')
+                .get();
+        } catch (err) {
+            // If query fails, try without status filter
+            console.error('Error querying orders:', err);
+            ordersSnapshot = await db.collection('orders').get();
+        }
+        
+        // Get all products to build cost map (for efficient cost lookup)
+        const productsSnapshot = await db.collection('products').get();
+        const productCostMap = {}; // { product_id: cost }
+        productsSnapshot.docs.forEach(doc => {
+            const productData = doc.data();
+            const productId = String(productData.product_id || doc.id);
+            // Use product cost if specified, otherwise default to 50% of price
+            if (productData.cost !== undefined && productData.cost !== null) {
+                productCostMap[productId] = Number(productData.cost);
+            } else {
+                const price = Number(productData.price || 0);
+                productCostMap[productId] = price * 0.5; // 50% default
+            }
+        });
+        
+        let totalRevenue = 0;
+        let totalCost = 0;
+        const dailyData = {}; // { 'YYYY-MM-DD': { revenue, cost, profit } }
+        
+        for (const doc of ordersSnapshot.docs) {
+            const orderData = doc.data();
+            
+            // Skip if not delivered
+            if (orderData.status !== 'delivered') {
+                continue;
+            }
+            
+            // Get order date
+            let orderDateObj = null;
+            if (orderData.created_at && typeof orderData.created_at.toDate === 'function') {
+                orderDateObj = orderData.created_at.toDate();
+            } else if (orderData.date) {
+                if (typeof orderData.date.toDate === 'function') {
+                    orderDateObj = orderData.date.toDate();
+                } else if (typeof orderData.date === 'string') {
+                    orderDateObj = new Date(orderData.date);
+                } else {
+                    orderDateObj = new Date(orderData.date);
+                }
+            }
+            
+            // Skip if no valid date
+            if (!orderDateObj || isNaN(orderDateObj.getTime())) {
+                continue;
+            }
+            
+            // Filter by date range
+            if (orderDateObj < startDate || orderDateObj > endDate) {
+                continue;
+            }
+            
+            const orderTotal = orderData.total_amount || 0;
+            
+            // Calculate cost using product cost (if specified) or 50% default
+            let orderCost = 0;
+            if (orderData.items && Array.isArray(orderData.items)) {
+                orderCost = orderData.items.reduce((sum, item) => {
+                    const productId = String(item.product_id || '');
+                    const quantity = Number(item.quantity || 1);
+                    const unitPrice = Number(item.unit_price || 0);
+                    
+                    // Get product cost from map, or use 50% of unit price as fallback
+                    const unitCost = productCostMap[productId] !== undefined 
+                        ? productCostMap[productId]
+                        : (unitPrice * 0.5); // 50% fallback
+                    
+                    return sum + (unitCost * quantity);
+                }, 0);
+            }
+            
+            totalRevenue += orderTotal;
+            totalCost += orderCost;
+            
+            // Group by date
+            const orderDate = orderDateObj.toISOString().split('T')[0];
+            
+            if (orderDate) {
+                if (!dailyData[orderDate]) {
+                    dailyData[orderDate] = { revenue: 0, cost: 0, profit: 0 };
+                }
+                dailyData[orderDate].revenue += orderTotal;
+                dailyData[orderDate].cost += orderCost;
+                dailyData[orderDate].profit += (orderTotal - orderCost);
+            }
+        }
+        
+        const totalProfit = totalRevenue - totalCost;
+        
+        // Count filtered orders
+        const filteredOrderCount = Object.values(dailyData).reduce((sum, data) => {
+            // This is approximate - we count unique dates
+            return sum + 1;
+        }, 0);
+        
+        // Convert daily data to array sorted by date
+        const dailyChartData = Object.entries(dailyData)
+            .map(([date, data]) => ({
+                date: date,
+                revenue: Number(data.revenue.toFixed(2)),
+                cost: Number(data.cost.toFixed(2)),
+                profit: Number(data.profit.toFixed(2))
+            }))
+            .sort((a, b) => a.date.localeCompare(b.date));
+        
+        // Count actual orders processed (we need to track this)
+        let actualOrderCount = 0;
+        for (const doc of ordersSnapshot.docs) {
+            const orderData = doc.data();
+            if (orderData.status !== 'delivered') continue;
+            
+            let orderDateObj = null;
+            if (orderData.created_at && typeof orderData.created_at.toDate === 'function') {
+                orderDateObj = orderData.created_at.toDate();
+            } else if (orderData.date) {
+                if (typeof orderData.date.toDate === 'function') {
+                    orderDateObj = orderData.date.toDate();
+                } else {
+                    orderDateObj = new Date(orderData.date);
+                }
+            }
+            
+            if (orderDateObj && !isNaN(orderDateObj.getTime())) {
+                if (orderDateObj >= startDate && orderDateObj <= endDate) {
+                    actualOrderCount++;
+                }
+            }
+        }
+        
+        return res.json({
+            period: {
+                start_date: start_date,
+                end_date: end_date
+            },
+            summary: {
+                total_revenue: Number(totalRevenue.toFixed(2)),
+                total_cost: Number(totalCost.toFixed(2)),
+                total_profit: Number(totalProfit.toFixed(2)),
+                profit_margin: totalRevenue > 0 
+                    ? Number(((totalProfit / totalRevenue) * 100).toFixed(2))
+                    : 0
+            },
+            daily_data: dailyChartData,
+            order_count: actualOrderCount
+        });
+    } catch (err) {
+        console.error('Calculate revenue error:', err);
+        return res.status(500).json({ error: 'Failed to calculate revenue', details: err.message });
+    }
+});
+
+// ============================================
+// INVOICE MANAGEMENT ENDPOINTS (11.4 - Sales Manager)
+// ============================================
+
+// GET /invoices - Sales manager views invoices in date range
+app.get('/invoices', authenticate, authorize(['sales_manager', 'admin']), async (req, res) => {
+    try {
+        const { start_date, end_date, status } = req.query;
+        
+        let query = db.collection('orders');
+        
+        // Filter by date range if provided
+        if (start_date || end_date) {
+            const startDate = start_date ? new Date(start_date) : new Date(0);
+            const endDate = end_date ? new Date(end_date) : new Date();
+            
+            // Firestore timestamp queries
+            if (start_date) {
+                query = query.where('created_at', '>=', admin.firestore.Timestamp.fromDate(startDate));
+            }
+            if (end_date) {
+                query = query.where('created_at', '<=', admin.firestore.Timestamp.fromDate(endDate));
+            }
+        }
+        
+        // Filter by status if provided
+        if (status) {
+            query = query.where('status', '==', status);
+        }
+        
+        let snapshot;
+        try {
+            snapshot = await query.orderBy('created_at', 'desc').limit(100).get();
+        } catch (e) {
+            // If index doesn't exist, fetch without orderBy
+            snapshot = await query.limit(100).get();
+        }
+        
+        const invoices = [];
+        for (const doc of snapshot.docs) {
+            const orderData = doc.data();
+            
+            // Get user info
+            let userInfo = {};
+            try {
+                const userDoc = await db.collection('users').doc(String(orderData.user_id)).get();
+                if (userDoc.exists) {
+                    const userData = userDoc.data();
+                    userInfo = {
+                        name: userData.name || 'Unknown',
+                        email: userData.email || 'N/A',
+                        address: userData.address || 'N/A'
+                    };
+                }
+            } catch (e) {
+                console.error(`Error fetching user ${orderData.user_id}:`, e);
+            }
+            
+            // Format date
+            let orderDate = '';
+            if (orderData.created_at && typeof orderData.created_at.toDate === 'function') {
+                orderDate = orderData.created_at.toDate().toISOString();
+            } else if (orderData.date) {
+                if (typeof orderData.date.toDate === 'function') {
+                    orderDate = orderData.date.toDate().toISOString();
+                } else {
+                    orderDate = orderData.date.toString();
+                }
+            } else {
+                orderDate = new Date().toISOString();
+            }
+            
+            invoices.push({
+                order_id: orderData.order_id,
+                user_id: orderData.user_id,
+                user: userInfo,
+                status: orderData.status,
+                total_amount: orderData.total_amount || 0,
+                items: orderData.items || [],
+                delivery_address: orderData.delivery_address || 'N/A',
+                created_at: orderDate,
+                date: orderDate
+            });
+        }
+        
+        // Sort by date descending if we couldn't use orderBy
+        invoices.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        
+        return res.json({ 
+            invoices,
+            count: invoices.length,
+            filters: {
+                start_date: start_date || null,
+                end_date: end_date || null,
+                status: status || null
+            }
+        });
+    } catch (err) {
+        console.error('Get invoices error:', err);
+        return res.status(500).json({ error: 'Failed to fetch invoices', details: err.message });
+    }
+});
+
+// GET /invoices/:orderId/pdf - Generate and download PDF invoice
+app.get('/invoices/:orderId/pdf', authenticate, authorize(['sales_manager', 'admin']), async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        
+        const orderRef = db.collection('orders').doc(String(orderId));
+        const orderDoc = await orderRef.get();
+        
+        if (!orderDoc.exists) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+        
+        const orderData = orderDoc.data();
+        
+        // Get user email
+        let userEmail = 'customer@example.com';
+        try {
+            const userDoc = await db.collection('users').doc(String(orderData.user_id)).get();
+            if (userDoc.exists) {
+                userEmail = userDoc.data().email || userEmail;
+            }
+        } catch (e) {
+            console.error('Error fetching user email:', e);
+        }
+        
+        // Generate PDF
+        const pdfPath = await generateInvoicePDF(orderData, userEmail);
+        
+        // Send PDF as response
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename=invoice_${orderData.order_id}.pdf`);
+        
+        const fileStream = fs.createReadStream(pdfPath);
+        fileStream.pipe(res);
+        
+        // Clean up file after sending
+        fileStream.on('end', () => {
+            setTimeout(() => {
+                try {
+                    fs.unlinkSync(pdfPath);
+                } catch (e) {
+                    console.error('Error deleting temp PDF:', e);
+                }
+            }, 1000);
+        });
+    } catch (err) {
+        console.error('Generate PDF invoice error:', err);
+        return res.status(500).json({ error: 'Failed to generate PDF invoice', details: err.message });
+    }
+});
+
+// ============================================
 // USER INFORMATION ENDPOINTS
 // ============================================
 
