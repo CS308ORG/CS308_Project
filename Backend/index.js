@@ -690,7 +690,8 @@ app.get('/users/:uid/orders', authenticate, async (req, res) => {
             orders.push({
                 ...orderData,
                 items: enrichedItems,
-                date: createdAt
+                date: createdAt,
+                created_at: createdAt // Also include created_at for frontend
             });
         }
 
@@ -1461,6 +1462,327 @@ app.get('/users/:uid/refunds', authenticate, async (req, res) => {
     } catch (err) {
         console.error('Get user refunds error:', err);
         return res.status(500).json({ error: 'Failed to fetch user refunds' });
+    }
+});
+
+// ============================================
+// WISHLIST ENDPOINTS
+// ============================================
+
+// GET /users/:uid/wishlist - Get user's wishlist
+app.get('/users/:uid/wishlist', authenticate, async (req, res) => {
+    try {
+        const { uid } = req.params;
+        const userId = req.user.uid || req.user.user_id;
+        
+        // Verify user can only access their own wishlist
+        if (String(uid) !== String(userId) && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+        
+        const userDoc = await db.collection('users').doc(String(uid)).get();
+        if (!userDoc.exists) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        const userData = userDoc.data();
+        const wishlistProductIds = userData.wishlist || [];
+        
+        // Fetch product details for wishlist items
+        const products = [];
+        for (const productId of wishlistProductIds) {
+            try {
+                const productDoc = await db.collection('products').doc(String(productId)).get();
+                if (productDoc.exists) {
+                    products.push({
+                        id: productDoc.id,
+                        ...productDoc.data()
+                    });
+                }
+            } catch (e) {
+                console.error(`Error fetching product ${productId}:`, e);
+            }
+        }
+        
+        return res.json({ wishlist: products });
+    } catch (err) {
+        console.error('Get wishlist error:', err);
+        return res.status(500).json({ error: 'Failed to fetch wishlist', details: err.message });
+    }
+});
+
+// POST /users/:uid/wishlist - Add product to wishlist
+app.post('/users/:uid/wishlist', authenticate, async (req, res) => {
+    try {
+        const { uid } = req.params;
+        const { product_id } = req.body;
+        const userId = req.user.uid || req.user.user_id;
+        
+        // Verify user can only modify their own wishlist
+        if (String(uid) !== String(userId) && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+        
+        if (!product_id) {
+            return res.status(400).json({ error: 'product_id is required' });
+        }
+        
+        const userRef = db.collection('users').doc(String(uid));
+        const userDoc = await userRef.get();
+        
+        if (!userDoc.exists) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        const userData = userDoc.data();
+        const wishlist = userData.wishlist || [];
+        const productIdStr = String(product_id);
+        
+        // Check if product already in wishlist
+        if (wishlist.includes(productIdStr)) {
+            return res.status(400).json({ error: 'Product already in wishlist' });
+        }
+        
+        // Verify product exists
+        const productDoc = await db.collection('products').doc(String(product_id)).get();
+        if (!productDoc.exists) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+        
+        // Add to wishlist
+        await userRef.update({
+            wishlist: FieldValue.arrayUnion(productIdStr)
+        });
+        
+        return res.json({ success: true, message: 'Product added to wishlist' });
+    } catch (err) {
+        console.error('Add to wishlist error:', err);
+        return res.status(500).json({ error: 'Failed to add to wishlist', details: err.message });
+    }
+});
+
+// DELETE /users/:uid/wishlist/:productId - Remove product from wishlist
+app.delete('/users/:uid/wishlist/:productId', authenticate, async (req, res) => {
+    try {
+        const { uid, productId } = req.params;
+        const userId = req.user.uid || req.user.user_id;
+        
+        // Verify user can only modify their own wishlist
+        if (String(uid) !== String(userId) && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+        
+        const userRef = db.collection('users').doc(String(uid));
+        const userDoc = await userRef.get();
+        
+        if (!userDoc.exists) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        // Remove from wishlist
+        await userRef.update({
+            wishlist: FieldValue.arrayRemove(String(productId))
+        });
+        
+        return res.json({ success: true, message: 'Product removed from wishlist' });
+    } catch (err) {
+        console.error('Remove from wishlist error:', err);
+        return res.status(500).json({ error: 'Failed to remove from wishlist', details: err.message });
+    }
+});
+
+// ============================================
+// ORDER CANCELLATION ENDPOINTS
+// ============================================
+
+// PUT /orders/:orderId/cancel - Customer cancels order (only if processing)
+app.put('/orders/:orderId/cancel', authenticate, async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        const userId = req.user.uid || req.user.user_id;
+        
+        const orderRef = db.collection('orders').doc(String(orderId));
+        const orderDoc = await orderRef.get();
+        
+        if (!orderDoc.exists) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+        
+        const orderData = orderDoc.data();
+        
+        // Verify order belongs to user
+        if (String(orderData.user_id) !== String(userId) && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Unauthorized - order does not belong to user' });
+        }
+        
+        // Check order status - can only cancel if processing
+        if (orderData.status !== 'processing') {
+            return res.status(400).json({ 
+                error: 'Order can only be cancelled when status is "processing"',
+                currentStatus: orderData.status
+            });
+        }
+        
+        // Use transaction to restore stock and cancel order
+        await db.runTransaction(async (tx) => {
+            // Restore stock for each item
+            const items = orderData.items || [];
+            for (const item of items) {
+                const productRef = db.collection('products').doc(String(item.product_id));
+                const productDoc = await tx.get(productRef);
+                
+                if (productDoc.exists) {
+                    tx.update(productRef, {
+                        quantity_in_stock: FieldValue.increment(item.quantity || 1)
+                    });
+                }
+            }
+            
+            // Update order status to cancelled
+            tx.update(orderRef, {
+                status: 'cancelled',
+                cancelled_at: FieldValue.serverTimestamp(),
+                updated_at: FieldValue.serverTimestamp()
+            });
+        });
+        
+        return res.json({ success: true, message: 'Order cancelled successfully' });
+    } catch (err) {
+        console.error('Cancel order error:', err);
+        return res.status(500).json({ error: 'Failed to cancel order', details: err.message });
+    }
+});
+
+// ============================================
+// USER INFORMATION ENDPOINTS
+// ============================================
+
+// GET /users/:uid/info - Get user information
+app.get('/users/:uid/info', authenticate, async (req, res) => {
+    try {
+        const { uid } = req.params;
+        const userId = req.user.uid || req.user.user_id;
+        
+        // Verify user can only access their own info (or admin)
+        if (String(uid) !== String(userId) && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+        
+        const userDoc = await db.collection('users').doc(String(uid)).get();
+        if (!userDoc.exists) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        const userData = userDoc.data();
+        
+        // Return user info (excluding password for security)
+        return res.json({
+            id: userDoc.id,
+            user_id: userData.user_id,
+            name: userData.name || '',
+            email: userData.email || '',
+            address: userData.address || '',
+            taxID: userData.taxID || '',
+            role: userData.role || 'customer',
+            created_at: userData.created_at || null
+        });
+    } catch (err) {
+        console.error('Get user info error:', err);
+        return res.status(500).json({ error: 'Failed to fetch user information', details: err.message });
+    }
+});
+
+// PUT /users/:uid/info - Update user information
+app.put('/users/:uid/info', authenticate, async (req, res) => {
+    try {
+        const { uid } = req.params;
+        const { name, email, address, taxID, password } = req.body;
+        const userId = req.user.uid || req.user.user_id;
+        
+        // Verify user can only update their own info (or admin)
+        if (String(uid) !== String(userId) && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+        
+        const userRef = db.collection('users').doc(String(uid));
+        const userDoc = await userRef.get();
+        
+        if (!userDoc.exists) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        const updates = {};
+        
+        // Update name if provided
+        if (name !== undefined) {
+            updates.name = name;
+        }
+        
+        // Update email if provided (check for duplicates)
+        if (email !== undefined) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                return res.status(400).json({ error: 'Invalid email format' });
+            }
+            
+            // Check if email is already used by another user
+            const emailCheck = await db.collection('users')
+                .where('email', '==', email)
+                .limit(1)
+                .get();
+            
+            if (!emailCheck.empty && emailCheck.docs[0].id !== String(uid)) {
+                return res.status(409).json({ error: 'Email already registered' });
+            }
+            
+            updates.email = email;
+        }
+        
+        // Update address if provided
+        if (address !== undefined) {
+            updates.address = address;
+        }
+        
+        // Update taxID if provided
+        if (taxID !== undefined) {
+            updates.taxID = taxID;
+        }
+        
+        // Update password if provided
+        if (password !== undefined) {
+            if (password.length < 6) {
+                return res.status(400).json({ error: 'Password too short (minimum 6 characters)' });
+            }
+            const saltRounds = 10;
+            updates.password = await bcrypt.hash(password, saltRounds);
+        }
+        
+        // Add updated_at timestamp
+        updates.updated_at = FieldValue.serverTimestamp();
+        
+        // Apply updates
+        await userRef.update(updates);
+        
+        // Fetch updated user data
+        const updatedDoc = await userRef.get();
+        const updatedData = updatedDoc.data();
+        
+        return res.json({
+            success: true,
+            message: 'User information updated successfully',
+            user: {
+                id: updatedDoc.id,
+                user_id: updatedData.user_id,
+                name: updatedData.name || '',
+                email: updatedData.email || '',
+                address: updatedData.address || '',
+                taxID: updatedData.taxID || '',
+                role: updatedData.role || 'customer'
+            }
+        });
+    } catch (err) {
+        console.error('Update user info error:', err);
+        return res.status(500).json({ error: 'Failed to update user information', details: err.message });
     }
 });
 

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'screens/home_screen.dart';
 
+import 'services/auth_service.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -16,6 +18,9 @@ void main() async {
       measurementId: "G-D87PLC55D",
     ),
   );
+  
+  // Restore auth session before running app
+  await AuthService().initialize();
   
   runApp(MyApp());
 }
