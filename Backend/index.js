@@ -484,6 +484,18 @@ app.post('/checkout', async (req, res) => {
                 unit_price: priceMap[String(item.product_id)] || 0
             }));
 
+            // Get user's current address for the order (within transaction)
+            let deliveryAddress = 'N/A';
+            try {
+                const userRef = db.collection('users').doc(String(normalizedUserId));
+                const userSnap = await tx.get(userRef);
+                if (userSnap.exists) {
+                    deliveryAddress = userSnap.data().address || 'N/A';
+                }
+            } catch (err) {
+                console.error('Error fetching user address for order:', err);
+            }
+            
             const orderRef = db.collection('orders').doc(String(orderId));
             const orderPayload = {
                 order_id: orderId,
@@ -491,6 +503,7 @@ app.post('/checkout', async (req, res) => {
                 status: initialStatus,
                 total_amount: Number(computedTotal.toFixed(2)),
                 items: itemsWithPrice,
+                delivery_address: deliveryAddress, // Store current user address
                 created_at: FieldValue.serverTimestamp(),
                 date: new Date().toISOString()
             };
@@ -635,10 +648,35 @@ app.get('/users/:uid/orders', authenticate, async (req, res) => {
                 .get();
         }
 
+        // Get user's current address for backfilling missing addresses
+        let userCurrentAddress = 'N/A';
+        try {
+            const userDoc = await db.collection('users').doc(String(uidQuery)).get();
+            if (userDoc.exists) {
+                userCurrentAddress = userDoc.data().address || 'N/A';
+            }
+        } catch (err) {
+            console.error('Error fetching user address:', err);
+        }
+
         const orders = [];
         for (const orderDoc of ordersSnapshot.docs) {
             const orderData = orderDoc.data();
             const orderId = orderData.order_id;
+            
+            // Backfill missing delivery_address
+            let deliveryAddress = orderData.delivery_address || orderData.deliveryAddress || 'N/A';
+            if (deliveryAddress === 'N/A' || !deliveryAddress || deliveryAddress.trim() === '') {
+                // Update the order in database with current user address
+                deliveryAddress = userCurrentAddress;
+                try {
+                    await db.collection('orders').doc(String(orderId)).update({
+                        delivery_address: userCurrentAddress
+                    });
+                } catch (updateErr) {
+                    console.error(`Error updating order ${orderId} address:`, updateErr);
+                }
+            }
 
             let items = [];
             if (Array.isArray(orderData.items) && orderData.items.length) {
@@ -691,7 +729,8 @@ app.get('/users/:uid/orders', authenticate, async (req, res) => {
                 ...orderData,
                 items: enrichedItems,
                 date: createdAt,
-                created_at: createdAt // Also include created_at for frontend
+                created_at: createdAt, // Also include created_at for frontend
+                delivery_address: deliveryAddress // Ensure delivery_address is included
             });
         }
 
@@ -1675,7 +1714,7 @@ app.get('/users/:uid/info', authenticate, async (req, res) => {
         
         const userData = userDoc.data();
         
-        // Return user info (excluding password for security)
+        // Return user info (including password for viewing/editing on My Information page)
         return res.json({
             id: userDoc.id,
             user_id: userData.user_id,
@@ -1683,6 +1722,7 @@ app.get('/users/:uid/info', authenticate, async (req, res) => {
             email: userData.email || '',
             address: userData.address || '',
             taxID: userData.taxID || '',
+            password: userData.password || '', // Include password for display
             role: userData.role || 'customer',
             created_at: userData.created_at || null
         });
