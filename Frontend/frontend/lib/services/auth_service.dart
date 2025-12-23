@@ -12,6 +12,7 @@ class AuthService extends ChangeNotifier {
 
   Map<String, dynamic>? _currentUser;
   String? _token;
+  bool _initialized = false;
 
   bool get isLoggedIn => _currentUser != null;
   Map<String, dynamic>? get currentUser => _currentUser;
@@ -19,6 +20,43 @@ class AuthService extends ChangeNotifier {
   
   // ✅ ADD THIS PUBLIC GETTER
   String? get token => _token;
+  
+  // Initialize and restore session from SharedPreferences
+  Future<void> initialize() async {
+    if (_initialized) return;
+    _initialized = true;
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedToken = prefs.getString('auth_token');
+      final savedUserId = prefs.getString('user_id');
+      
+      if (savedToken != null && savedUserId != null) {
+        // Restore token
+        _token = savedToken;
+        
+        // Restore user data from SharedPreferences
+        try {
+          final userDataString = prefs.getString('user_data');
+          if (userDataString != null) {
+            _currentUser = jsonDecode(userDataString);
+            // Load user's cart
+            await CartService().loadCartForUser(savedUserId);
+            notifyListeners();
+          }
+        } catch (e) {
+          print("Error restoring session: $e");
+          // Clear invalid session
+          await prefs.remove('auth_token');
+          await prefs.remove('user_id');
+          await prefs.remove('user_data');
+          _token = null;
+        }
+      }
+    } catch (e) {
+      print("Error initializing auth: $e");
+    }
+  }
 
   // Login using the Backend API (Fixes 4.0.2)
   Future<bool> login(String email, String password) async {
@@ -39,11 +77,12 @@ class AuthService extends ChangeNotifier {
           _currentUser = data['user'];
           final userKey = _resolveUserKey(_currentUser);
           
-          // SAVE TOKEN TO SHARED PREFERENCES ⬇️
+          // SAVE TOKEN AND USER DATA TO SHARED PREFERENCES ⬇️
           if (userKey != null) {
             final prefs = await SharedPreferences.getInstance();
             await prefs.setString('auth_token', userKey);
             await prefs.setString('user_id', userKey);
+            await prefs.setString('user_data', jsonEncode(_currentUser)); // Store user data
             _token = userKey;
           }
           
@@ -73,10 +112,11 @@ class AuthService extends ChangeNotifier {
     _currentUser = null;
     _token = null;
 
-    // CLEAR TOKEN FROM SHARED PREFERENCES ⬇️
+    // CLEAR TOKEN AND USER DATA FROM SHARED PREFERENCES ⬇️
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('auth_token');
     await prefs.remove('user_id');
+    await prefs.remove('user_data');
 
     // 1. Switch context to Guest (unlogged)
     await CartService().loadCartForUser(null);

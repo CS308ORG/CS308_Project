@@ -373,4 +373,131 @@ class ApiService {
       return false;
     }
   }
+
+  // --- WISHLIST METHODS ---
+
+  // Get user's wishlist
+  Future<List<dynamic>> getWishlist(String uid) async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return [];
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/users/$uid/wishlist'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['wishlist'] ?? [];
+      }
+    } catch (e) {
+      print("Error fetching wishlist: $e");
+    }
+    return [];
+  }
+
+  // Add product to wishlist
+  Future<bool> addToWishlist(String uid, String productId) async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return false;
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/users/$uid/wishlist'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'product_id': productId}),
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print("Error adding to wishlist: $e");
+      return false;
+    }
+  }
+
+  // Remove product from wishlist
+  Future<bool> removeFromWishlist(String uid, String productId) async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return false;
+
+      final response = await http.delete(
+        Uri.parse('$baseUrl/users/$uid/wishlist/$productId'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print("Error removing from wishlist: $e");
+      return false;
+    }
+  }
+
+  // --- ORDER CANCELLATION METHODS ---
+
+  // Cancel order (only if processing)
+  Future<bool> cancelOrder(String orderId) async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return false;
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/orders/$orderId/cancel'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print("Error cancelling order: $e");
+      return false;
+    }
+  }
+
+  // --- USER INFORMATION METHODS ---
+
+  // Get user information
+  Future<Map<String, dynamic>?> getUserInfo(String uid) async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return null;
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/users/$uid/info'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (e) {
+      print("Error fetching user info: $e");
+    }
+    return null;
+  }
+
+  // Update user information
+  Future<bool> updateUserInfo(String uid, Map<String, dynamic> updates) async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return false;
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/users/$uid/info'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(updates),
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print("Error updating user info: $e");
+      return false;
+    }
+  }
 }
