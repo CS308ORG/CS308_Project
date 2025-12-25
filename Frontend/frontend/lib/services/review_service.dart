@@ -118,6 +118,35 @@ class ReviewService {
     }
   }
 
+  /// Batch check eligibility for multiple user-product pairs (much faster!)
+  Future<Map<String, bool>> checkReviewEligibilityBatch(List<Map<String, String>> checks) async {
+    final token = AuthService().token;
+    if (token == null) throw Exception('Not authenticated');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/reviews/moderation/eligibility-batch'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: json.encode({
+        'checks': checks.map((c) => <String, String>{
+          'user_id': c['user_id']!,
+          'product_id': c['product_id']!,
+        }).toList(),
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      final eligibilities = data['eligibilities'] as Map<String, dynamic>? ?? {};
+      // Convert to Map<String, bool>
+      return eligibilities.map((key, value) => MapEntry(key, value == true));
+    } else {
+      throw Exception('Failed to check batch eligibility: ${response.body}');
+    }
+  }
+
   /// Approve a review (Product Manager only)
   Future<void> approveReview(String reviewId, {String? reason}) async {
     final token = AuthService().token;
@@ -187,6 +216,36 @@ class ReviewService {
       return {'name': 'Product #$productId', 'product_id': productId};
     }
     return {'name': 'Product #$productId', 'product_id': productId};
+  }
+
+  /// Batch get product details (much faster!)
+  Future<Map<String, Map<String, dynamic>>> getProductDetailsBatch(List<String> productIds) async {
+    final token = AuthService().token;
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/products/batch'),
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
+      body: json.encode({
+        'product_ids': productIds,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      final products = data['products'] as Map<String, dynamic>? ?? {};
+      // Convert to Map<String, Map<String, dynamic>>
+      return products.map((key, value) => MapEntry(key, value as Map<String, dynamic>));
+    }
+    
+    // Fallback: return empty map with default values
+    final fallback = <String, Map<String, dynamic>>{};
+    for (var productId in productIds) {
+      fallback[productId] = {'name': 'Product #$productId', 'product_id': productId};
+    }
+    return fallback;
   }
 
   /// Fetch public reviews for a product from backend
