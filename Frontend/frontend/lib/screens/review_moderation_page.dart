@@ -34,23 +34,51 @@ class _ReviewModerationPageState extends State<ReviewModerationPage> {
       // Use the new backend method from your extended service
       final reviews = await _service.getPendingReviewsFromBackend();
       
-      // Check eligibility for each review
-      for (var review in reviews) {
-        final userId = review['user_id'].toString();
-        final productId = review['product_id'].toString();
-        final key = '$userId-$productId';
-        
-        try {
-          // Always check eligibility fresh (don't use cache)
-          final eligible = await _service.checkReviewEligibility(userId, productId);
+      if (reviews.isEmpty) {
+        setState(() {
+          _reviews = reviews;
+          _loading = false;
+        });
+        return;
+      }
+
+      // Prepare batch eligibility check
+      final eligibilityChecks = reviews.map((review) {
+        return <String, String>{
+          'user_id': review['user_id'].toString(),
+          'product_id': review['product_id'].toString(),
+        };
+      }).toList();
+
+      // Batch check eligibility for all reviews at once (much faster!)
+      try {
+        final eligibilities = await _service.checkReviewEligibilityBatch(eligibilityChecks);
+        eligibilities.forEach((key, eligible) {
           _eligibilityCache[key] = eligible;
-          
-          // Load product details
-          final product = await _service.getProductDetails(productId);
-          _productCache[productId] = product;
-        } catch (e) {
-          print("Error checking eligibility for review: $e");
+        });
+      } catch (e) {
+        print("Error in batch eligibility check: $e");
+        // Fallback: mark all as ineligible if batch fails
+        for (var review in reviews) {
+          final key = '${review['user_id']}-${review['product_id']}';
           _eligibilityCache[key] = false;
+        }
+      }
+
+      // Load product details in batch (much faster!)
+      final productIds = reviews.map((r) => r['product_id'].toString()).toSet().toList();
+      try {
+        final products = await _service.getProductDetailsBatch(productIds);
+        products.forEach((productId, product) {
+          _productCache[productId] = product;
+        });
+      } catch (e) {
+        print("Error loading batch product details: $e");
+        // Fallback: mark products as unknown
+        for (var productId in productIds) {
+          if (!_productCache.containsKey(productId)) {
+            _productCache[productId] = {'name': 'Product #$productId', 'product_id': productId};
+          }
         }
       }
 
