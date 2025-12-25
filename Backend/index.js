@@ -10,7 +10,7 @@ app.use(express.json());
 const admin = require('firebase-admin');
 const JWT_SECRET = process.env.JWT_SECRET || 'cs308-secret-key-change-in-production';
 
-const serviceAccountPath = process.env.SERVICE_ACCOUNT_PATH;
+const serviceAccountPath = process.env.SERVICE_ACCOUNT_PATH || './cs308db-firebase-adminsdk-fbsvc-3a93f74bd8.json';
 if (admin.apps.length === 0) {
     if (serviceAccountPath) {
         const serviceAccount = require(serviceAccountPath);
@@ -26,6 +26,7 @@ if (admin.apps.length === 0) {
 
 const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
+const bucket = admin.storage().bucket('cs308db.firebasestorage.app');
 
 const bcrypt = require('bcrypt');
 const nodemailer = require('nodemailer');
@@ -290,8 +291,20 @@ app.get('/collections/:name', async (req, res) => {
                     : 0;
                 const popularityScore = existingPopularity > 0 ? existingPopularity : calculatedPopularity;
 
+                // Convert Firebase Storage URL to proxy URL if exists
+                let imageUrl = doc.image_url;
+                if (imageUrl && typeof imageUrl === 'string') {
+                    // Extract filename from Firebase Storage URL (handle both encoded and plain paths)
+                    const urlMatch = imageUrl.match(/products[%2F\/]([^?&]+)/);
+                    if (urlMatch) {
+                        const filename = decodeURIComponent(urlMatch[1].replace(/%2F/g, '/'));
+                        imageUrl = `${req.protocol}://${req.get('host')}/images/${encodeURIComponent(filename)}`;
+                    }
+                }
+                
                 return {
                     ...doc,
+                    image_url: imageUrl,
                     average_rating: ratingInfo.averageRating,
                     review_count: ratingInfo.reviewCount,
                     popularity_score: popularityScore
@@ -2591,6 +2604,30 @@ app.put('/users/:uid/info', authenticate, async (req, res) => {
     } catch (err) {
         console.error('Update user info error:', err);
         return res.status(500).json({ error: 'Failed to update user information', details: err.message });
+    }
+});
+
+// Image proxy endpoint to avoid CORS issues
+app.get('/images/:filename(*)', async (req, res) => {
+    try {
+        const filename = decodeURIComponent(req.params.filename);
+        const file = bucket.file(`products/${filename}`);
+        
+        const [exists] = await file.exists();
+        if (!exists) {
+            return res.status(404).json({ error: 'Image not found' });
+        }
+        
+        const [fileBuffer] = await file.download();
+        const [metadata] = await file.getMetadata();
+        
+        res.setHeader('Content-Type', metadata.contentType || 'image/png');
+        res.setHeader('Cache-Control', 'public, max-age=31536000');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.send(fileBuffer);
+    } catch (error) {
+        console.error('Image proxy error:', error);
+        res.status(500).json({ error: 'Failed to load image' });
     }
 });
 
