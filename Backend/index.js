@@ -850,6 +850,178 @@ app.get('/users/:uid/products/:productId/eligibility', authenticate, async (req,
     }
 });
 
+// Batch eligibility check endpoint - checks multiple user-product pairs at once
+app.post('/reviews/moderation/eligibility-batch', authenticate, authorize(['product_manager', 'admin']), async (req, res) => {
+    const { checks } = req.body; // Array of {user_id, product_id}
+    
+    if (!Array.isArray(checks) || checks.length === 0) {
+        return res.status(400).json({ error: 'Invalid request. Expected array of {user_id, product_id}' });
+    }
+
+    try {
+        const results = {};
+        
+        // Group checks by user_id to minimize database queries
+        const userGroups = {};
+        for (const check of checks) {
+            const userId = String(check.user_id);
+            if (!userGroups[userId]) {
+                userGroups[userId] = [];
+            }
+            userGroups[userId].push(check);
+        }
+
+        // Process all user groups in PARALLEL for maximum speed
+        const userPromises = Object.entries(userGroups).map(async ([userId, userChecks]) => {
+            const uidQuery = /^\d+$/.test(userId) ? parseInt(userId) : userId;
+            
+            // Get all delivered orders for this user (single query per user)
+            const ordersSnapshot = await db.collection('orders')
+                .where('user_id', '==', uidQuery)
+                .where('status', '==', 'delivered')
+                .get();
+
+            // Build a set of product IDs this user has in delivered orders
+            const userProductSet = new Set();
+            const orderIdsForItems = [];
+            
+            for (const orderDoc of ordersSnapshot.docs) {
+                const orderData = orderDoc.data();
+                const orderItems = orderData.items;
+                
+                if (Array.isArray(orderItems) && orderItems.length > 0) {
+                    // Items are in the order document itself
+                    for (const item of orderItems) {
+                        const pid = item.product_id;
+                        userProductSet.add(String(pid));
+                        if (/^\d+$/.test(String(pid))) {
+                            userProductSet.add(Number(pid).toString());
+                        }
+                    }
+                } else {
+                    // Need to check order_items collection - collect order IDs
+                    const orderId = orderData.order_id;
+                    if (orderId) {
+                        orderIdsForItems.push(orderId);
+                    }
+                }
+            }
+
+            // OPTIMIZATION: Batch fetch all order_items in one query instead of N queries
+            if (orderIdsForItems.length > 0) {
+                // Firestore whereIn limit is 10, so we need to batch
+                const batchSize = 10;
+                for (let i = 0; i < orderIdsForItems.length; i += batchSize) {
+                    const batch = orderIdsForItems.slice(i, i + batchSize);
+                    const itemSnapshot = await db.collection('order_items')
+                        .where('order_id', 'in', batch)
+                        .get();
+                    
+                    for (const itemDoc of itemSnapshot.docs) {
+                        const pid = itemDoc.data().product_id;
+                        userProductSet.add(String(pid));
+                        if (/^\d+$/.test(String(pid))) {
+                            userProductSet.add(Number(pid).toString());
+                        }
+                    }
+                }
+            }
+
+            // Check eligibility for each product for this user
+            const userResults = {};
+            for (const check of userChecks) {
+                const productId = String(check.product_id);
+                const key = `${check.user_id}-${check.product_id}`;
+                
+                // Check if product exists in user's delivered orders
+                const canReview = userProductSet.has(productId) || 
+                                 userProductSet.has(Number(productId).toString()) ||
+                                 (/^\d+$/.test(productId) && userProductSet.has(parseInt(productId).toString()));
+                
+                userResults[key] = canReview;
+            }
+            
+            return userResults;
+        });
+
+        // Wait for all users to be processed in parallel
+        const allUserResults = await Promise.all(userPromises);
+        
+        // Merge all results
+        for (const userResult of allUserResults) {
+            Object.assign(results, userResult);
+        }
+
+        return res.json({ eligibilities: results });
+    } catch (err) {
+        console.error("Batch eligibility check error:", err);
+        return res.status(500).json({ error: err.message });
+    }
+});
+
+// Batch product details endpoint - fetch multiple products at once
+app.post('/products/batch', async (req, res) => {
+    const { product_ids } = req.body;
+    
+    if (!Array.isArray(product_ids) || product_ids.length === 0) {
+        return res.status(400).json({ error: 'Invalid request. Expected array of product_ids' });
+    }
+
+    try {
+        const products = {};
+        
+        // Firestore whereIn limit is 10, so we need to batch
+        const batchSize = 10;
+        const productPromises = [];
+        
+        for (let i = 0; i < product_ids.length; i += batchSize) {
+            const batch = product_ids.slice(i, i + batchSize).map(id => String(id));
+            const promise = Promise.all(batch.map(async (productId) => {
+                try {
+                    // Try to get by document ID first
+                    const doc = await db.collection('products').doc(productId).get();
+                    if (doc.exists) {
+                        const data = doc.data();
+                        const pid = data.product_id ?? productId;
+                        return { id: String(pid), data: { ...data, product_id: pid } };
+                    }
+                    
+                    // If not found by doc ID, try querying by product_id field
+                    const querySnapshot = await db.collection('products')
+                        .where('product_id', '==', /^\d+$/.test(productId) ? parseInt(productId) : productId)
+                        .limit(1)
+                        .get();
+                    
+                    if (!querySnapshot.empty) {
+                        const data = querySnapshot.docs[0].data();
+                        const pid = data.product_id ?? productId;
+                        return { id: String(pid), data: { ...data, product_id: pid } };
+                    }
+                    
+                    return null;
+                } catch (e) {
+                    console.error(`Error fetching product ${productId}:`, e);
+                    return null;
+                }
+            })).then(results => {
+                results.forEach(result => {
+                    if (result) {
+                        products[result.id] = result.data;
+                    }
+                });
+            });
+            productPromises.push(promise);
+        }
+        
+        await Promise.all(productPromises);
+        
+        return res.json({ products });
+    } catch (err) {
+        console.error("Batch product details error:", err);
+        return res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('/products/:id/reviews', async (req, res) => {
     const productId = req.params.id;
     const pidInt = parseInt(productId);
