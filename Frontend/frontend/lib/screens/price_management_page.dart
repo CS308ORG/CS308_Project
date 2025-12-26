@@ -280,8 +280,13 @@ class _PriceManagementPageState extends State<PriceManagementPage> {
     return Scaffold(
       backgroundColor: Color(0xFFFFF5E6),
       appBar: AppBar(
-        title: Text('Price & Discount Management'),
+        title: Text(
+          'Price & Discount Management',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         backgroundColor: Color(0xFFFF7733),
+        foregroundColor: Colors.white,
+        elevation: 2,
         actions: [
           IconButton(
             icon: Icon(Icons.refresh),
