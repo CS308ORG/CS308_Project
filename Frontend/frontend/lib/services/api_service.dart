@@ -681,6 +681,24 @@ class ApiService {
     }
   }
 
+  // Delete a notification
+  Future<bool> deleteNotification(String notificationId) async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return false;
+
+      final response = await http.delete(
+        Uri.parse('$baseUrl/notifications/$notificationId'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      print("Error deleting notification: $e");
+      return false;
+    }
+  }
+
   // --- INVOICE MANAGEMENT METHODS (11.4) ---
 
   // Get invoices with date range filter
