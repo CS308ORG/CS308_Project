@@ -18,6 +18,13 @@ class _WishlistPageState extends State<WishlistPage> {
   bool _loading = true;
   Set<String> _wishlistProductIds = {};
 
+  // Design constants
+  static const Color _primaryText = Color(0xFF1A1A2E);
+  static const Color _secondaryText = Color(0xFF6B7280);
+  static const Color _accentColor = Color(0xFFFF7733);
+  static const Color _borderColor = Color(0xFFE5E7EB);
+  static const Color _pageBackground = Color(0xFFFFF5E6); // Match site theme
+
   @override
   void initState() {
     super.initState();
@@ -42,7 +49,6 @@ class _WishlistPageState extends State<WishlistPage> {
           _loading = false;
         });
       } catch (e) {
-        print("Error fetching wishlist: $e");
         setState(() {
           _wishlist = [];
           _wishlistProductIds = {};
@@ -72,37 +78,22 @@ class _WishlistPageState extends State<WishlistPage> {
           _wishlistProductIds.remove(productId);
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Removed from wishlist'),
-            backgroundColor: Colors.green,
-          ),
+          const SnackBar(content: Text('Removed from wishlist'), backgroundColor: Colors.green),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to remove from wishlist'),
-            backgroundColor: Colors.red,
-          ),
+          const SnackBar(content: Text('Failed to remove from wishlist'), backgroundColor: Colors.red),
         );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text('Error: ${e.toString()}'), backgroundColor: Colors.red),
       );
     }
   }
 
   String? getProductImageUrl(Map<String, dynamic> product) {
-    final keys = [
-      'imageUrl',
-      'image_url',
-      'image',
-      'thumbnailUrl',
-      'thumbnail_url',
-    ];
+    final keys = ['imageUrl', 'image_url', 'image', 'thumbnailUrl', 'thumbnail_url'];
     for (final key in keys) {
       if (product[key] != null && product[key].toString().isNotEmpty) {
         return product[key].toString();
@@ -118,19 +109,13 @@ class _WishlistPageState extends State<WishlistPage> {
     final rating = product['average_rating'] ?? 0.0;
     final price = product['price'] ?? 0;
 
-    // Calculate max allowed (Lowest of stock or 10)
     final int maxAllowed = min(stock, 10);
 
-    // Check quantity in cart
     final cartItem = CartService().items.firstWhere(
-      (item) =>
-          (item['id'] ?? item['product_id']).toString() ==
-          (product['product_id'] ?? product['id']).toString(),
+      (item) => (item['id'] ?? item['product_id']).toString() == (product['product_id'] ?? product['id']).toString(),
       orElse: () => {},
     );
     final int currentCartQty = cartItem['quantity'] ?? 0;
-
-    // Disable if cart quantity reached max allowed
     final bool canAddToCart = currentCartQty < maxAllowed;
 
     return ProductCardWidget(
@@ -142,14 +127,10 @@ class _WishlistPageState extends State<WishlistPage> {
       rating: rating,
       price: price,
       onTap: () async {
-        // Products in wishlist are always wishlisted
         final result = await Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => ProductDetail(
-              product: product,
-              initialWishlistStatus: true, // Always true since it's from wishlist
-            ),
+            builder: (context) => ProductDetail(product: product, initialWishlistStatus: true),
           ),
         );
         if (result == true) {
@@ -166,73 +147,99 @@ class _WishlistPageState extends State<WishlistPage> {
   @override
   Widget build(BuildContext context) {
     return StoreLayout(
-      body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFFFF7733)),
-            )
-          : SingleChildScrollView(
-              child: Column(
-                children: [
-                  // Wrapper for Margins - 1080 MaxWidth (same as main menu)
-                  Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 1080),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 16,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              "My Wishlist",
-                              style: TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.w300,
-                                letterSpacing: 1.2,
-                                color: Color(0xFFFF7733),
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                            if (_wishlist.isEmpty)
-                              const Center(
-                                child: Padding(
-                                  padding: EdgeInsets.all(32.0),
-                                  child: Text(
-                                    "Your wishlist is empty.",
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      color: Colors.grey,
-                                    ),
+      body: Container(
+        color: _pageBackground,
+        child: _loading
+            ? const Center(child: CircularProgressIndicator(color: _accentColor, strokeWidth: 2))
+            : SingleChildScrollView(
+                padding: const EdgeInsets.only(bottom: 80),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1080),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Header
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 32),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "MY WISHLIST",
+                                  style: TextStyle(
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w300,
+                                    letterSpacing: 4,
+                                    color: _primaryText,
                                   ),
                                 ),
-                              )
-                            else
-                              GridView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 3,
-                                  childAspectRatio: 0.68,
-                                  crossAxisSpacing: 24,
-                                  mainAxisSpacing: 24,
+                                const SizedBox(height: 12),
+                                Container(width: 40, height: 2, color: _accentColor),
+                                const SizedBox(height: 8),
+                                Text(
+                                  "${_wishlist.length} ${_wishlist.length == 1 ? 'item' : 'items'}",
+                                  style: TextStyle(fontSize: 14, color: _secondaryText),
                                 ),
-                                itemCount: _wishlist.length,
-                                itemBuilder: (context, index) {
-                                  final product = _wishlist[index];
-                                  return _buildProductCard(product);
-                                },
+                              ],
+                            ),
+                          ),
+
+                          // Empty State or Grid
+                          if (_wishlist.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 80),
+                              child: Center(
+                                child: Column(
+                                  children: [
+                                    Icon(
+                                      Icons.favorite_border,
+                                      size: 72,
+                                      color: _secondaryText.withValues(alpha: 0.3),
+                                    ),
+                                    const SizedBox(height: 20),
+                                    Text(
+                                      "Your wishlist is empty",
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w300,
+                                        color: _secondaryText,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      "Save items you love by tapping the heart icon",
+                                      style: TextStyle(fontSize: 14, color: _secondaryText.withValues(alpha: 0.7)),
+                                    ),
+                                  ],
+                                ),
                               ),
-                          ],
-                        ),
+                            )
+                          else
+                            GridView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 3,
+                                childAspectRatio: 0.68,
+                                crossAxisSpacing: 24,
+                                mainAxisSpacing: 24,
+                              ),
+                              itemCount: _wishlist.length,
+                              itemBuilder: (context, index) {
+                                final product = _wishlist[index];
+                                return _buildProductCard(product);
+                              },
+                            ),
+                        ],
                       ),
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
+      ),
     );
   }
 }
-

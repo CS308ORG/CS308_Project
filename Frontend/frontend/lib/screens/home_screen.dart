@@ -106,12 +106,19 @@ class _StoreLayoutState extends State<StoreLayout> {
   // Notification state (11.3)
   int _unreadNotificationCount = 0;
   List<dynamic> _notifications = [];
+  String? _lastLoadedUserId;
 
   @override
   void initState() {
     super.initState();
     _loadDataForSuggestions();
     _loadNotifications();
+    // Initialize _lastLoadedUserId to track current user on first load
+    final authService = AuthService();
+    _lastLoadedUserId = authService.currentUser?['id']?.toString() ??
+                        authService.currentUser?['user_id']?.toString();
+    // Listen for auth changes to reload notifications
+    AuthService().addListener(_onAuthChanged);
     _searchFocusNode.addListener(() {
       if (_searchFocusNode.hasFocus) {
         _onSearchChanged(_searchController.text);
@@ -123,6 +130,28 @@ class _StoreLayoutState extends State<StoreLayout> {
         });
       }
     });
+  }
+
+  void _onAuthChanged() {
+    final authService = AuthService();
+    final currentUserId = authService.currentUser?['id']?.toString() ??
+                          authService.currentUser?['user_id']?.toString();
+
+    // Reload notifications if user changed or logged out
+    if (currentUserId != _lastLoadedUserId) {
+      _lastLoadedUserId = currentUserId;
+      if (currentUserId != null) {
+        _loadNotifications();
+      } else {
+        // User logged out - clear notifications
+        if (mounted) {
+          setState(() {
+            _unreadNotificationCount = 0;
+            _notifications = [];
+          });
+        }
+      }
+    }
   }
 
   // Load notifications for logged-in user (11.3)
@@ -188,65 +217,141 @@ class _StoreLayoutState extends State<StoreLayout> {
                     ],
                   ),
                 )
-              : ListView.builder(
-                  itemCount: _notifications.length,
-                  itemBuilder: (context, index) {
-                    final notification = _notifications[index];
-                    final isRead = notification['is_read'] == true;
-                    return Card(
-                      color: isRead ? Colors.white : Color(0xFFFFF5E6),
-                      child: ListTile(
-                        leading: Icon(
-                          notification['type'] == 'price_drop' 
-                              ? Icons.local_offer 
-                              : Icons.notifications,
-                          color: Color(0xFFFF7733),
-                        ),
-                        title: Text(
-                          notification['title'] ?? 'Notification',
-                          style: TextStyle(
-                            fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
-                          ),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              notification['message'] ?? '',
-                              style: TextStyle(fontSize: 12),
+              : Builder(
+                  builder: (context) {
+                    // Sort: unread first, then by created_at descending
+                    final sortedNotifications = List<dynamic>.from(_notifications)
+                      ..sort((a, b) {
+                        final aRead = a['is_read'] == true ? 1 : 0;
+                        final bRead = b['is_read'] == true ? 1 : 0;
+                        if (aRead != bRead) return aRead - bRead; // Unread (0) before read (1)
+                        // If same read status, sort by date descending
+                        final aDate = DateTime.tryParse(a['created_at'] ?? '') ?? DateTime(1970);
+                        final bDate = DateTime.tryParse(b['created_at'] ?? '') ?? DateTime(1970);
+                        return bDate.compareTo(aDate);
+                      });
+
+                    return ListView.builder(
+                      itemCount: sortedNotifications.length,
+                      itemBuilder: (context, index) {
+                        final notification = sortedNotifications[index];
+                        final isRead = notification['is_read'] == true;
+                        final isRefundNotification = notification['type'] == 'refund_approved' ||
+                                                     notification['type'] == 'refund_rejected';
+                        return Card(
+                          color: isRead ? Colors.grey[100] : Color(0xFFFFF5E6),
+                          child: ListTile(
+                            leading: Icon(
+                              notification['type'] == 'price_drop'
+                                  ? Icons.local_offer
+                                  : isRefundNotification
+                                      ? (notification['type'] == 'refund_approved'
+                                          ? Icons.check_circle
+                                          : Icons.cancel)
+                                      : Icons.notifications,
+                              color: isRead
+                                  ? Colors.grey
+                                  : (notification['type'] == 'refund_approved'
+                                      ? Colors.green
+                                      : notification['type'] == 'refund_rejected'
+                                          ? Colors.red
+                                          : Color(0xFFFF7733)),
                             ),
-                            SizedBox(height: 4),
-                            Text(
-                              _formatNotificationDate(notification['created_at']),
-                              style: TextStyle(fontSize: 10, color: Colors.grey),
+                            title: Text(
+                              notification['title'] ?? 'Notification',
+                              style: TextStyle(
+                                fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
+                                color: isRead ? Colors.grey : Colors.black,
+                              ),
                             ),
-                          ],
-                        ),
-                        onTap: () async {
-                          // Mark as read
-                          if (!isRead && notification['id'] != null) {
-                            await _apiService.markNotificationAsRead(notification['id']);
-                            _loadNotifications();
-                          }
-                          Navigator.pop(dialogContext);
-                          // Navigate to product if it's a price drop notification
-                          if (notification['product_id'] != null) {
-                            final product = _allProducts.firstWhere(
-                              (p) => p['product_id'] == notification['product_id'] || 
-                                     p['id'] == notification['product_id'].toString(),
-                              orElse: () => null,
-                            );
-                            if (product != null) {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => ProductDetail(product: product),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  notification['message'] ?? '',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isRead ? Colors.grey : Colors.black87,
+                                  ),
                                 ),
-                              );
-                            }
-                          }
-                        },
-                      ),
+                                SizedBox(height: 4),
+                                Text(
+                                  _formatNotificationDate(notification['created_at']),
+                                  style: TextStyle(fontSize: 10, color: Colors.grey),
+                                ),
+                              ],
+                            ),
+                            trailing: IconButton(
+                              icon: Icon(Icons.delete_outline, size: 20),
+                              color: Colors.grey,
+                              onPressed: () async {
+                                if (notification['id'] != null) {
+                                  final confirmed = await showDialog<bool>(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      title: Text('Delete Notification'),
+                                      content: Text('Are you sure you want to delete this notification?'),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(ctx, false),
+                                          child: Text('Cancel'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(ctx, true),
+                                          child: Text('Delete', style: TextStyle(color: Colors.red)),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (confirmed == true) {
+                                    await _apiService.deleteNotification(notification['id']);
+                                    _loadNotifications();
+                                    // Refresh the dialog by closing and reopening
+                                    Navigator.pop(dialogContext);
+                                    _showNotificationsDialog(context);
+                                  }
+                                }
+                              },
+                            ),
+                            onTap: () async {
+                              // Mark as read
+                              if (!isRead && notification['id'] != null) {
+                                await _apiService.markNotificationAsRead(notification['id']);
+                                _loadNotifications();
+                              }
+                              Navigator.pop(dialogContext);
+
+                              // Navigate based on notification type
+                              if (isRefundNotification && notification['order_id'] != null) {
+                                // Navigate to order history page for refund notifications
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => OrderHistoryPage(
+                                      highlightOrderId: notification['order_id'],
+                                    ),
+                                  ),
+                                );
+                              } else if (notification['product_id'] != null) {
+                                // Navigate to product if it's a price drop notification
+                                final product = _allProducts.firstWhere(
+                                  (p) => p['product_id'] == notification['product_id'] ||
+                                         p['id'] == notification['product_id'].toString(),
+                                  orElse: () => null,
+                                );
+                                if (product != null) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => ProductDetail(product: product),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                          ),
+                        );
+                      },
                     );
                   },
                 ),
@@ -278,6 +383,7 @@ class _StoreLayoutState extends State<StoreLayout> {
 
   @override
   void dispose() {
+    AuthService().removeListener(_onAuthChanged);
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();

@@ -384,7 +384,14 @@ class _RefundManagementPageState extends State<RefundManagementPage> {
     if (dateValue == null) return "-";
     try {
       String dateStr = dateValue.toString();
-      final date = DateTime.parse(dateStr);
+      DateTime date;
+      // Ensure UTC is properly recognized and converted to local time (UTC+3 for Turkey)
+      if (dateStr.endsWith('Z') || dateStr.contains('+00:00')) {
+        date = DateTime.parse(dateStr.replaceAll('+00:00', 'Z')).toLocal();
+      } else {
+        final parsed = DateTime.parse(dateStr);
+        date = parsed.isUtc ? parsed.toLocal() : parsed;
+      }
       return "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}:${date.second.toString().padLeft(2, '0')}";
     } catch (e) {
       return "-";
@@ -395,7 +402,14 @@ class _RefundManagementPageState extends State<RefundManagementPage> {
     if (dateValue == null) return "Not set";
     try {
       String dateStr = dateValue.toString();
-      final date = DateTime.parse(dateStr);
+      DateTime date;
+      // Ensure UTC is properly recognized and converted to local time (UTC+3 for Turkey)
+      if (dateStr.endsWith('Z') || dateStr.contains('+00:00')) {
+        date = DateTime.parse(dateStr.replaceAll('+00:00', 'Z')).toLocal();
+      } else {
+        final parsed = DateTime.parse(dateStr);
+        date = parsed.isUtc ? parsed.toLocal() : parsed;
+      }
       final monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       final monthName = monthNames[date.month - 1];
       return "${date.day} $monthName ${date.year}, ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}:${date.second.toString().padLeft(2, '0')}";

@@ -636,6 +636,110 @@ app.put('/users/:id/role', authenticate, authorize(['admin']), async (req, res) 
     }
 });
 
+// Fix orders without dates - sets dates based on status
+app.post('/admin/fix-order-dates', authenticate, authorize(['admin']), async (req, res) => {
+    try {
+        const ordersSnapshot = await db.collection('orders').get();
+        let fixed = 0;
+        const fixedOrders = [];
+
+        const now = new Date();
+        const thirtyFiveDaysAgo = new Date(now.getTime() - 35 * 24 * 60 * 60 * 1000);
+        const twentyFiveDaysAgo = new Date(now.getTime() - 25 * 24 * 60 * 60 * 1000);
+
+        for (const doc of ordersSnapshot.docs) {
+            const data = doc.data();
+
+            // Skip orders that already have dates
+            if (data.created_at || data.date) continue;
+
+            // Determine date based on status
+            const status = (data.status || '').toLowerCase();
+            let newDate;
+
+            if (status === 'delivered') {
+                newDate = twentyFiveDaysAgo;
+            } else {
+                // processing, in_transit, or any other status
+                newDate = thirtyFiveDaysAgo;
+            }
+
+            await doc.ref.update({
+                created_at: newDate,
+                date: newDate.toISOString()
+            });
+
+            fixed++;
+            fixedOrders.push({
+                order_id: doc.id,
+                status: status,
+                new_date: newDate.toISOString()
+            });
+        }
+
+        return res.json({ success: true, fixed, fixedOrders });
+    } catch (err) {
+        console.error('Fix order dates error:', err);
+        return res.status(500).json({ error: 'Failed to fix order dates', details: err.message });
+    }
+});
+
+// Backfill user_id for refunds missing it
+app.post('/admin/fix-refund-user-ids', authenticate, authorize(['admin']), async (req, res) => {
+    try {
+        const refundsSnapshot = await db.collection('refunds').get();
+        let fixed = 0;
+        const fixedRefunds = [];
+
+        for (const doc of refundsSnapshot.docs) {
+            const refundData = doc.data();
+
+            // Skip if already has user_id
+            if (refundData.user_id) continue;
+
+            // Look up the order to get user_id
+            const orderId = refundData.order_id;
+            if (!orderId) continue;
+
+            const orderDoc = await db.collection('orders').doc(String(orderId)).get();
+            if (!orderDoc.exists) continue;
+
+            const orderData = orderDoc.data();
+            const userId = orderData.user_id;
+
+            if (userId) {
+                // Also get customer info for completeness
+                let customerName = '';
+                let customerEmail = '';
+                try {
+                    const userDoc = await db.collection('users').doc(String(userId)).get();
+                    if (userDoc.exists) {
+                        customerName = userDoc.data().name || '';
+                        customerEmail = userDoc.data().email || '';
+                    }
+                } catch (e) {}
+
+                await doc.ref.update({
+                    user_id: userId,
+                    customer_name: customerName || refundData.customer_name || '',
+                    customer_email: customerEmail || refundData.customer_email || ''
+                });
+                fixed++;
+                fixedRefunds.push({
+                    refund_id: doc.id,
+                    order_id: orderId,
+                    user_id: userId
+                });
+            }
+        }
+
+        return res.json({ success: true, fixed, fixedRefunds });
+    } catch (err) {
+        console.error('Fix refund user IDs error:', err);
+        return res.status(500).json({ error: 'Failed to fix refund user IDs', details: err.message });
+    }
+});
+
 app.get('/users/:uid/orders', authenticate, async (req, res) => {
     const uid = req.params.uid;
     if (String(req.user.uid) !== String(uid) && req.user.role !== 'admin') {
@@ -694,8 +798,14 @@ app.get('/users/:uid/orders', authenticate, async (req, res) => {
                 if (productId !== undefined) {
                     try {
                         const productDoc = await db.collection('products').doc(String(productId)).get();
-                        if (productDoc.exists) productDetails = productDoc.data();
-                    } catch (e) { }
+                        if (productDoc.exists) {
+                            productDetails = productDoc.data();
+                        } else {
+                            console.log(`Product doc ${productId} not found`);
+                        }
+                    } catch (e) {
+                        console.error(`Error fetching product ${productId}:`, e.message);
+                    }
                 }
                 
                 // Check if there's a refund for this item
@@ -719,6 +829,7 @@ app.get('/users/:uid/orders', authenticate, async (req, res) => {
                     ...productDetails,
                     ...item,
                     name: item.name || productDetails.name || 'Unknown Product',
+                    image_url: productDetails.image_url || item.image_url || item.imageUrl || null,
                     refund_status: refundStatus || item.refund_status || null
                 });
             }
@@ -738,8 +849,8 @@ app.get('/users/:uid/orders', authenticate, async (req, res) => {
                     createdAt = orderData.date.toString();
                 }
             } else {
-                // Only use current date if absolutely no date exists (shouldn't happen for existing orders)
-                createdAt = new Date().toISOString();
+                // Use fixed historical date for orders without dates (prevents dates from changing)
+                createdAt = '2023-01-01T00:00:00.000Z';
             }
             orders.push({
                 ...orderData,
@@ -1677,53 +1788,232 @@ app.put('/refunds/:id/approve', authenticate, authorize(['sales_manager', 'admin
             }
         });
 
-        // Send email notification if approved
-        if (decisionNormalized === 'approved') {
-            try {
-                const updatedRefundData = await refundRef.get();
-                const finalRefundData = updatedRefundData.data();
-                
-                const userId = finalRefundData.user_id || refundData.user_id;
-                if (!userId) {
-                    console.error('Cannot send refund email: missing user_id');
-                } else {
-                    const userDoc = await db.collection('users').doc(String(userId)).get();
-                    const userEmail = userDoc.exists ? userDoc.data().email : null;
-                    const userName = userDoc.exists ? userDoc.data().name : 'Customer';
+        // Send email and in-app notification for refund decision
+        try {
+            const updatedRefundData = await refundRef.get();
+            const finalRefundData = updatedRefundData.data();
 
+            const userId = finalRefundData.user_id || refundData.user_id;
+            if (!userId) {
+                console.error('Cannot send refund notification: missing user_id');
+            } else {
+                const userDoc = await db.collection('users').doc(String(userId)).get();
+                const userEmail = userDoc.exists ? userDoc.data().email : null;
+                const userName = userDoc.exists ? userDoc.data().name : 'Customer';
+
+                const productDoc = await db.collection('products').doc(String(refundData.product_id)).get();
+                const productName = productDoc.exists ? productDoc.data().name : 'Product';
+
+                const refundAmount = finalRefundData.total_refund_amount || calculatedRefundAmount || 0;
+                const refundQty = finalRefundData.quantity || refundQuantity || 1;
+
+                if (decisionNormalized === 'approved') {
+                    // Send approval email with professional template
                     if (userEmail && emailTransporter) {
-                        const productDoc = await db.collection('products').doc(String(refundData.product_id)).get();
-                        const productName = productDoc.exists ? productDoc.data().name : 'Product';
-                        
-                        const refundAmount = finalRefundData.total_refund_amount || calculatedRefundAmount || 0;
-                        const refundQty = finalRefundData.quantity || refundQuantity || 1;
-
                         const mailOptions = {
                             from: process.env.EMAIL_USER || 'noreply@cs308shop.com',
                             to: userEmail,
-                            subject: `Refund Approved for Order #${refundData.order_id}`,
+                            subject: `Refund Approved - Order #${refundData.order_id}`,
                             html: `
-                                <h2>Refund Approved</h2>
-                                <p>Dear ${userName},</p>
-                                <p>Your refund request for <strong>${productName}</strong> from Order #${refundData.order_id} has been approved.</p>
-                                <p><strong>Refund Amount:</strong> $${refundAmount.toFixed(2)}</p>
-                                <p><strong>Quantity:</strong> ${refundQty}</p>
-                                <p>The refunded amount will be credited back to your original payment method.</p>
-                                ${reason ? `<p><strong>Note:</strong> ${reason}</p>` : ''}
-                                <br>
-                                <p>Thank you for your patience.</p>
-                                <p>Best regards,<br>CS308 Shop Team</p>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f4;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f4;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);">
+          <tr>
+            <td style="background-color:#FF7733;padding:30px 40px;text-align:center;">
+              <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:300;letter-spacing:2px;">CS308 SHOP</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:40px 40px 20px;text-align:center;">
+              <div style="width:70px;height:70px;background-color:#E8F5E9;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;">
+                <span style="color:#4CAF50;font-size:36px;line-height:70px;">&#10003;</span>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 40px 40px;">
+              <h2 style="color:#1a1a2e;margin:0 0 24px;font-size:24px;text-align:center;font-weight:400;">Refund Approved</h2>
+              <p style="color:#6b7280;font-size:16px;line-height:1.6;margin:0 0 16px;">Dear ${userName},</p>
+              <p style="color:#6b7280;font-size:16px;line-height:1.6;margin:0 0 30px;">Great news! Your refund request has been approved and processed successfully.</p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8f9fa;border-radius:8px;margin-bottom:30px;">
+                <tr>
+                  <td style="padding:16px 20px;border-bottom:1px solid #e5e7eb;">
+                    <span style="color:#9ca3af;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Product</span><br>
+                    <strong style="color:#1a1a2e;font-size:16px;">${productName}</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:16px 20px;border-bottom:1px solid #e5e7eb;">
+                    <span style="color:#9ca3af;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Order ID</span><br>
+                    <strong style="color:#1a1a2e;font-size:16px;">#${refundData.order_id}</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:16px 20px;border-bottom:1px solid #e5e7eb;">
+                    <span style="color:#9ca3af;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Quantity</span><br>
+                    <strong style="color:#1a1a2e;font-size:16px;">${refundQty}</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <span style="color:#9ca3af;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Refund Amount</span><br>
+                    <strong style="color:#4CAF50;font-size:22px;">$${refundAmount.toFixed(2)}</strong>
+                  </td>
+                </tr>
+              </table>
+              ${reason ? `<p style="color:#6b7280;font-size:14px;line-height:1.6;margin:0 0 20px;padding:16px;background-color:#fff8f0;border-left:3px solid #FF7733;border-radius:4px;"><strong>Note:</strong> ${reason}</p>` : ''}
+              <p style="color:#6b7280;font-size:14px;line-height:1.6;margin:0;">The refund will be credited to your original payment method within <strong>5-10 business days</strong>.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#f8f9fa;padding:24px 40px;text-align:center;border-top:1px solid #e5e7eb;">
+              <p style="color:#9ca3af;font-size:12px;margin:0;">Thank you for shopping with us.</p>
+              <p style="color:#9ca3af;font-size:12px;margin:8px 0 0;">© 2025 CS308 Shop. All rights reserved.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
                             `
                         };
-
                         await emailTransporter.sendMail(mailOptions);
                         console.log(`Refund approval email sent to ${userEmail}`);
                     }
+
+                    // Create in-app notification for approval
+                    // Convert userId to integer if it's a numeric string for consistency
+                    const userIdInt = /^\d+$/.test(String(userId)) ? parseInt(userId) : userId;
+                    const approvalNotification = {
+                        user_id: userIdInt,
+                        type: 'refund_approved',
+                        title: 'Refund Approved',
+                        message: `Your refund for ${productName} ($${refundAmount.toFixed(2)}) has been approved and will be credited to your original payment method.`,
+                        refund_id: id,
+                        order_id: refundData.order_id,
+                        product_name: productName,
+                        refund_amount: refundAmount,
+                        is_read: false,
+                        created_at: FieldValue.serverTimestamp()
+                    };
+                    await db.collection('notifications').add(approvalNotification);
+                    console.log(`Refund approval in-app notification created for user ${userId}`);
+
+                } else {
+                    // Send rejection email with professional template
+                    if (userEmail && emailTransporter) {
+                        const mailOptions = {
+                            from: process.env.EMAIL_USER || 'noreply@cs308shop.com',
+                            to: userEmail,
+                            subject: `Refund Request Update - Order #${refundData.order_id}`,
+                            html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f4;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f4;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);">
+          <tr>
+            <td style="background-color:#FF7733;padding:30px 40px;text-align:center;">
+              <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:300;letter-spacing:2px;">CS308 SHOP</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:40px 40px 20px;text-align:center;">
+              <div style="width:70px;height:70px;background-color:#FFF3E0;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;">
+                <span style="color:#FF7733;font-size:36px;line-height:70px;">!</span>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 40px 40px;">
+              <h2 style="color:#1a1a2e;margin:0 0 24px;font-size:24px;text-align:center;font-weight:400;">Refund Request Declined</h2>
+              <p style="color:#6b7280;font-size:16px;line-height:1.6;margin:0 0 16px;">Dear ${userName},</p>
+              <p style="color:#6b7280;font-size:16px;line-height:1.6;margin:0 0 30px;">We have reviewed your refund request and unfortunately, we are unable to approve it at this time.</p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8f9fa;border-radius:8px;margin-bottom:30px;">
+                <tr>
+                  <td style="padding:16px 20px;border-bottom:1px solid #e5e7eb;">
+                    <span style="color:#9ca3af;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Product</span><br>
+                    <strong style="color:#1a1a2e;font-size:16px;">${productName}</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <span style="color:#9ca3af;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Order ID</span><br>
+                    <strong style="color:#1a1a2e;font-size:16px;">#${refundData.order_id}</strong>
+                  </td>
+                </tr>
+              </table>
+              ${reason ? `
+              <div style="margin-bottom:30px;padding:20px;background-color:#fff8f0;border-left:3px solid #FF7733;border-radius:4px;">
+                <span style="color:#9ca3af;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Reason</span><br>
+                <p style="color:#1a1a2e;font-size:14px;line-height:1.6;margin:8px 0 0;">${reason}</p>
+              </div>
+              ` : ''}
+              <p style="color:#6b7280;font-size:14px;line-height:1.6;margin:0 0 20px;">If you believe this decision was made in error or have additional information to provide, please don't hesitate to contact our customer support team.</p>
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding:20px 0;">
+                    <a href="mailto:support@cs308shop.com" style="display:inline-block;padding:14px 32px;background-color:#FF7733;color:#ffffff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:500;">Contact Support</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#f8f9fa;padding:24px 40px;text-align:center;border-top:1px solid #e5e7eb;">
+              <p style="color:#9ca3af;font-size:12px;margin:0;">We appreciate your understanding.</p>
+              <p style="color:#9ca3af;font-size:12px;margin:8px 0 0;">© 2025 CS308 Shop. All rights reserved.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+                            `
+                        };
+                        await emailTransporter.sendMail(mailOptions);
+                        console.log(`Refund rejection email sent to ${userEmail}`);
+                    }
+
+                    // Create in-app notification for rejection
+                    // Convert userId to integer if it's a numeric string for consistency
+                    const userIdIntRej = /^\d+$/.test(String(userId)) ? parseInt(userId) : userId;
+                    const rejectionNotification = {
+                        user_id: userIdIntRej,
+                        type: 'refund_rejected',
+                        title: 'Refund Request Declined',
+                        message: `Your refund request for ${productName} was not approved.${reason ? ' Reason: ' + reason : ''}`,
+                        refund_id: id,
+                        order_id: refundData.order_id,
+                        product_name: productName,
+                        is_read: false,
+                        created_at: FieldValue.serverTimestamp()
+                    };
+                    await db.collection('notifications').add(rejectionNotification);
+                    console.log(`Refund rejection in-app notification created for user ${userId}`);
                 }
-            } catch (emailErr) {
-                console.error('Refund email error:', emailErr);
-                // Don't fail the request if email fails
             }
+        } catch (notificationErr) {
+            console.error('Refund notification error:', notificationErr);
+            // Don't fail the request if notification fails
         }
 
         const updatedRefund = await refundRef.get();
@@ -2178,23 +2468,53 @@ app.get('/users/:uid/notifications', authenticate, async (req, res) => {
             return res.status(403).json({ error: 'Unauthorized' });
         }
         
-        const uidQuery = /^\d+$/.test(uid) ? parseInt(uid) : uid;
-        
-        let snapshot;
+        // Query with both int and string versions of user_id for compatibility
+        const uidInt = /^\d+$/.test(uid) ? parseInt(uid) : null;
+        const uidStr = String(uid);
+
+        let allDocs = [];
+
+        // Try to fetch with integer user_id
+        if (uidInt !== null) {
+            try {
+                const snapshotInt = await db.collection('notifications')
+                    .where('user_id', '==', uidInt)
+                    .orderBy('created_at', 'desc')
+                    .limit(50)
+                    .get();
+                allDocs = allDocs.concat(snapshotInt.docs);
+            } catch (e) {
+                const snapshotInt = await db.collection('notifications')
+                    .where('user_id', '==', uidInt)
+                    .get();
+                allDocs = allDocs.concat(snapshotInt.docs);
+            }
+        }
+
+        // Also fetch with string user_id (for older notifications)
         try {
-            snapshot = await db.collection('notifications')
-                .where('user_id', '==', uidQuery)
+            const snapshotStr = await db.collection('notifications')
+                .where('user_id', '==', uidStr)
                 .orderBy('created_at', 'desc')
                 .limit(50)
                 .get();
+            allDocs = allDocs.concat(snapshotStr.docs);
         } catch (e) {
-            // If index doesn't exist, fetch without orderBy
-            snapshot = await db.collection('notifications')
-                .where('user_id', '==', uidQuery)
+            const snapshotStr = await db.collection('notifications')
+                .where('user_id', '==', uidStr)
                 .get();
+            allDocs = allDocs.concat(snapshotStr.docs);
         }
-        
-        const notifications = snapshot.docs.map(doc => {
+
+        // Deduplicate by doc id
+        const seenIds = new Set();
+        const uniqueDocs = allDocs.filter(doc => {
+            if (seenIds.has(doc.id)) return false;
+            seenIds.add(doc.id);
+            return true;
+        });
+
+        const notifications = uniqueDocs.map(doc => {
             const data = doc.data();
             return {
                 id: doc.id,
@@ -2225,14 +2545,37 @@ app.get('/users/:uid/notifications/unread-count', authenticate, async (req, res)
             return res.status(403).json({ error: 'Unauthorized' });
         }
         
-        const uidQuery = /^\d+$/.test(uid) ? parseInt(uid) : uid;
-        
-        const snapshot = await db.collection('notifications')
-            .where('user_id', '==', uidQuery)
+        // Query with both int and string versions of user_id for compatibility
+        const uidInt = /^\d+$/.test(uid) ? parseInt(uid) : null;
+        const uidStr = String(uid);
+
+        let allDocs = [];
+
+        // Fetch with integer user_id
+        if (uidInt !== null) {
+            const snapshotInt = await db.collection('notifications')
+                .where('user_id', '==', uidInt)
+                .where('is_read', '==', false)
+                .get();
+            allDocs = allDocs.concat(snapshotInt.docs);
+        }
+
+        // Also fetch with string user_id
+        const snapshotStr = await db.collection('notifications')
+            .where('user_id', '==', uidStr)
             .where('is_read', '==', false)
             .get();
-        
-        return res.json({ count: snapshot.size });
+        allDocs = allDocs.concat(snapshotStr.docs);
+
+        // Deduplicate by doc id
+        const seenIds = new Set();
+        const uniqueCount = allDocs.filter(doc => {
+            if (seenIds.has(doc.id)) return false;
+            seenIds.add(doc.id);
+            return true;
+        }).length;
+
+        return res.json({ count: uniqueCount });
     } catch (err) {
         console.error('Get unread count error:', err);
         return res.status(500).json({ error: 'Failed to get unread count' });
@@ -2301,6 +2644,231 @@ app.put('/users/:uid/notifications/read-all', authenticate, async (req, res) => 
     } catch (err) {
         console.error('Mark all read error:', err);
         return res.status(500).json({ error: 'Failed to mark notifications as read' });
+    }
+});
+
+// POST /test/refund-emails - Send test refund emails (for demonstration)
+app.post('/test/refund-emails', async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({ error: 'Email address is required' });
+        }
+
+        if (!emailTransporter) {
+            return res.status(500).json({ error: 'Email transporter not configured. Check EMAIL_USER and EMAIL_PASS in .env' });
+        }
+
+        // Mock data for the test emails
+        const mockData = {
+            userName: 'Valued Customer',
+            productName: 'Wireless Headphones',
+            orderId: '12345',
+            refundQty: 1,
+            refundAmount: 149.99,
+            reason: 'Product was defective upon arrival'
+        };
+
+        // Send APPROVED refund email
+        const approvedMailOptions = {
+            from: process.env.EMAIL_USER || 'noreply@cs308shop.com',
+            to: email,
+            subject: `[TEST] Refund Approved - Order #${mockData.orderId}`,
+            html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f4;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f4;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);">
+          <tr>
+            <td style="background-color:#FF7733;padding:30px 40px;text-align:center;">
+              <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:300;letter-spacing:2px;">CS308 SHOP</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:40px 40px 20px;text-align:center;">
+              <div style="width:70px;height:70px;background-color:#E8F5E9;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;">
+                <span style="color:#4CAF50;font-size:36px;line-height:70px;">&#10003;</span>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 40px 40px;">
+              <h2 style="color:#1a1a2e;margin:0 0 24px;font-size:24px;text-align:center;font-weight:400;">Refund Approved</h2>
+              <p style="color:#6b7280;font-size:16px;line-height:1.6;margin:0 0 16px;">Dear ${mockData.userName},</p>
+              <p style="color:#6b7280;font-size:16px;line-height:1.6;margin:0 0 30px;">Great news! Your refund request has been approved and processed successfully.</p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8f9fa;border-radius:8px;margin-bottom:30px;">
+                <tr>
+                  <td style="padding:16px 20px;border-bottom:1px solid #e5e7eb;">
+                    <span style="color:#9ca3af;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Product</span><br>
+                    <strong style="color:#1a1a2e;font-size:16px;">${mockData.productName}</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:16px 20px;border-bottom:1px solid #e5e7eb;">
+                    <span style="color:#9ca3af;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Order ID</span><br>
+                    <strong style="color:#1a1a2e;font-size:16px;">#${mockData.orderId}</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:16px 20px;border-bottom:1px solid #e5e7eb;">
+                    <span style="color:#9ca3af;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Quantity</span><br>
+                    <strong style="color:#1a1a2e;font-size:16px;">${mockData.refundQty}</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <span style="color:#9ca3af;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Refund Amount</span><br>
+                    <strong style="color:#4CAF50;font-size:22px;">$${mockData.refundAmount.toFixed(2)}</strong>
+                  </td>
+                </tr>
+              </table>
+              <p style="color:#6b7280;font-size:14px;line-height:1.6;margin:0;">The refund will be credited to your original payment method within <strong>5-10 business days</strong>.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#f8f9fa;padding:24px 40px;text-align:center;border-top:1px solid #e5e7eb;">
+              <p style="color:#9ca3af;font-size:12px;margin:0;">Thank you for shopping with us.</p>
+              <p style="color:#9ca3af;font-size:12px;margin:8px 0 0;">© 2025 CS308 Shop. All rights reserved.</p>
+              <p style="color:#FF7733;font-size:10px;margin:16px 0 0;font-weight:bold;">[THIS IS A TEST EMAIL]</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+            `
+        };
+
+        // Send REJECTED refund email
+        const rejectedMailOptions = {
+            from: process.env.EMAIL_USER || 'noreply@cs308shop.com',
+            to: email,
+            subject: `[TEST] Refund Request Declined - Order #${mockData.orderId}`,
+            html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f4;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f4;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);">
+          <tr>
+            <td style="background-color:#FF7733;padding:30px 40px;text-align:center;">
+              <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:300;letter-spacing:2px;">CS308 SHOP</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:40px 40px 20px;text-align:center;">
+              <div style="width:70px;height:70px;background-color:#FFF3E0;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;">
+                <span style="color:#FF7733;font-size:36px;line-height:70px;">!</span>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 40px 40px;">
+              <h2 style="color:#1a1a2e;margin:0 0 24px;font-size:24px;text-align:center;font-weight:400;">Refund Request Declined</h2>
+              <p style="color:#6b7280;font-size:16px;line-height:1.6;margin:0 0 16px;">Dear ${mockData.userName},</p>
+              <p style="color:#6b7280;font-size:16px;line-height:1.6;margin:0 0 30px;">We have reviewed your refund request and unfortunately, we are unable to approve it at this time.</p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8f9fa;border-radius:8px;margin-bottom:30px;">
+                <tr>
+                  <td style="padding:16px 20px;border-bottom:1px solid #e5e7eb;">
+                    <span style="color:#9ca3af;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Product</span><br>
+                    <strong style="color:#1a1a2e;font-size:16px;">${mockData.productName}</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <span style="color:#9ca3af;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Order ID</span><br>
+                    <strong style="color:#1a1a2e;font-size:16px;">#${mockData.orderId}</strong>
+                  </td>
+                </tr>
+              </table>
+              <div style="margin-bottom:30px;padding:20px;background-color:#fff8f0;border-left:3px solid #FF7733;border-radius:4px;">
+                <span style="color:#9ca3af;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Reason</span><br>
+                <p style="color:#1a1a2e;font-size:14px;line-height:1.6;margin:8px 0 0;">${mockData.reason}</p>
+              </div>
+              <p style="color:#6b7280;font-size:14px;line-height:1.6;margin:0 0 20px;">If you believe this decision was made in error or have additional information to provide, please don't hesitate to contact our customer support team.</p>
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding:20px 0;">
+                    <a href="mailto:support@cs308shop.com" style="display:inline-block;padding:14px 32px;background-color:#FF7733;color:#ffffff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:500;">Contact Support</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#f8f9fa;padding:24px 40px;text-align:center;border-top:1px solid #e5e7eb;">
+              <p style="color:#9ca3af;font-size:12px;margin:0;">We appreciate your understanding.</p>
+              <p style="color:#9ca3af;font-size:12px;margin:8px 0 0;">© 2025 CS308 Shop. All rights reserved.</p>
+              <p style="color:#FF7733;font-size:10px;margin:16px 0 0;font-weight:bold;">[THIS IS A TEST EMAIL]</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+            `
+        };
+
+        // Send both emails
+        await emailTransporter.sendMail(approvedMailOptions);
+        console.log(`Test APPROVED refund email sent to ${email}`);
+
+        await emailTransporter.sendMail(rejectedMailOptions);
+        console.log(`Test REJECTED refund email sent to ${email}`);
+
+        return res.json({
+            success: true,
+            message: `Two test refund emails (approved + rejected) sent to ${email}`
+        });
+    } catch (err) {
+        console.error('Test email error:', err);
+        return res.status(500).json({ error: 'Failed to send test emails', details: err.message });
+    }
+});
+
+// DELETE /notifications/:id - Delete a notification
+app.delete('/notifications/:id', authenticate, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.uid || req.user.user_id;
+
+        const notificationRef = db.collection('notifications').doc(id);
+        const notificationDoc = await notificationRef.get();
+
+        if (!notificationDoc.exists) {
+            return res.status(404).json({ error: 'Notification not found' });
+        }
+
+        const notificationData = notificationDoc.data();
+        // Check ownership - user can only delete their own notifications
+        if (String(notificationData.user_id) !== String(userId) && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+
+        await notificationRef.delete();
+
+        return res.json({ success: true, message: 'Notification deleted' });
+    } catch (err) {
+        console.error('Delete notification error:', err);
+        return res.status(500).json({ error: 'Failed to delete notification' });
     }
 });
 
