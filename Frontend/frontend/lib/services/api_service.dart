@@ -752,6 +752,22 @@ class ApiService {
     return null;
   }
 
+  // --- CATEGORY METHODS ---
+
+  // Get all categories (dynamic from backend)
+  Future<List<String>> getCategories() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/categories'));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return List<String>.from(data['categories'] ?? []);
+      }
+    } catch (e) {
+      print("Error fetching categories: $e");
+    }
+    return [];
+  }
+
   // --- REVENUE & PROFIT/LOSS METHODS ---
 
   // Get revenue and profit/loss for date range

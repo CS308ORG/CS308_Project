@@ -3063,8 +3063,8 @@ app.get('/revenue', authenticate, authorize(['sales_manager', 'admin']), async (
 // INVOICE MANAGEMENT ENDPOINTS (11.4 - Sales Manager)
 // ============================================
 
-// GET /invoices - Sales manager views invoices in date range
-app.get('/invoices', authenticate, authorize(['sales_manager', 'admin']), async (req, res) => {
+// GET /invoices - Sales manager & Product manager views invoices in date range
+app.get('/invoices', authenticate, authorize(['sales_manager', 'product_manager', 'admin']), async (req, res) => {
     try {
         const { start_date, end_date, status } = req.query;
         
@@ -3163,7 +3163,7 @@ app.get('/invoices', authenticate, authorize(['sales_manager', 'admin']), async 
 });
 
 // GET /invoices/:orderId/pdf - Generate and download PDF invoice
-app.get('/invoices/:orderId/pdf', authenticate, authorize(['sales_manager', 'admin']), async (req, res) => {
+app.get('/invoices/:orderId/pdf', authenticate, authorize(['sales_manager', 'product_manager', 'admin']), async (req, res) => {
     try {
         const { orderId } = req.params;
         
@@ -3368,6 +3368,345 @@ app.get('/images/:filename(*)', async (req, res) => {
     } catch (error) {
         console.error('Image proxy error:', error);
         res.status(500).json({ error: 'Failed to load image' });
+    }
+});
+
+// =====================================================
+// 12.1 - PRODUCT MANAGER: Product & Category Management
+// =====================================================
+
+// GET /products/manage - Get all products for management (with stock info)
+app.get('/products/manage', authenticate, authorize(['product_manager', 'admin']), async (req, res) => {
+    try {
+        const snapshot = await db.collection('products').get();
+        const products = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+        return res.json({ products });
+    } catch (err) {
+        console.error('Get products for management error:', err);
+        return res.status(500).json({ error: 'Failed to fetch products' });
+    }
+});
+
+// POST /products - Add new product
+app.post('/products', authenticate, authorize(['product_manager', 'admin']), async (req, res) => {
+    try {
+        const {
+            name,
+            description,
+            price,
+            category,
+            quantity_in_stock,
+            model,
+            serial_number,
+            warranty_status,
+            distributor_info,
+            image_url
+        } = req.body;
+
+        if (!name || price === undefined || quantity_in_stock === undefined) {
+            return res.status(400).json({ error: 'Name, price, and quantity_in_stock are required' });
+        }
+
+        // Get max product_id
+        const allProducts = await db.collection('products').get();
+        let maxId = 0;
+        allProducts.forEach(doc => {
+            const pid = doc.data().product_id;
+            if (typeof pid === 'number' && pid > maxId) maxId = pid;
+        });
+        const newProductId = maxId + 1;
+
+        const newProduct = {
+            product_id: newProductId,
+            name,
+            description: description || '',
+            price: Number(price),
+            category: category || 'Uncategorized',
+            quantity_in_stock: Number(quantity_in_stock),
+            model: model || '',
+            serial_number: serial_number || '',
+            warranty_status: warranty_status || '',
+            distributor_info: distributor_info || '',
+            image_url: image_url || '',
+            created_at: FieldValue.serverTimestamp(),
+            updated_at: FieldValue.serverTimestamp()
+        };
+
+        const docRef = await db.collection('products').add(newProduct);
+
+        return res.status(201).json({
+            success: true,
+            message: 'Product created successfully',
+            product: { id: docRef.id, ...newProduct }
+        });
+    } catch (err) {
+        console.error('Create product error:', err);
+        return res.status(500).json({ error: 'Failed to create product', details: err.message });
+    }
+});
+
+// PUT /products/:id - Update product
+app.put('/products/:id', authenticate, authorize(['product_manager', 'admin']), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updates = req.body;
+
+        // Remove fields that shouldn't be updated directly
+        delete updates.product_id;
+        delete updates.created_at;
+
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({ error: 'No update fields provided' });
+        }
+
+        // Convert numeric fields
+        if (updates.price !== undefined) updates.price = Number(updates.price);
+        if (updates.quantity_in_stock !== undefined) updates.quantity_in_stock = Number(updates.quantity_in_stock);
+
+        updates.updated_at = FieldValue.serverTimestamp();
+
+        const productRef = db.collection('products').doc(id);
+        const productDoc = await productRef.get();
+
+        if (!productDoc.exists) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        await productRef.update(updates);
+        const updatedDoc = await productRef.get();
+
+        return res.json({
+            success: true,
+            message: 'Product updated successfully',
+            product: { id: updatedDoc.id, ...updatedDoc.data() }
+        });
+    } catch (err) {
+        console.error('Update product error:', err);
+        return res.status(500).json({ error: 'Failed to update product', details: err.message });
+    }
+});
+
+// DELETE /products/:id - Remove product
+app.delete('/products/:id', authenticate, authorize(['product_manager', 'admin']), async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const productRef = db.collection('products').doc(id);
+        const productDoc = await productRef.get();
+
+        if (!productDoc.exists) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        await productRef.delete();
+
+        return res.json({
+            success: true,
+            message: 'Product deleted successfully'
+        });
+    } catch (err) {
+        console.error('Delete product error:', err);
+        return res.status(500).json({ error: 'Failed to delete product', details: err.message });
+    }
+});
+
+// =====================================================
+// 12.1 - PRODUCT MANAGER: Stock Management
+// =====================================================
+
+// PUT /products/:id/stock - Update product stock
+app.put('/products/:id/stock', authenticate, authorize(['product_manager', 'admin']), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { quantity_in_stock, adjustment } = req.body;
+
+        const productRef = db.collection('products').doc(id);
+        const productDoc = await productRef.get();
+
+        if (!productDoc.exists) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        let updateData = { updated_at: FieldValue.serverTimestamp() };
+
+        if (adjustment !== undefined) {
+            // Relative adjustment (add or subtract)
+            updateData.quantity_in_stock = FieldValue.increment(Number(adjustment));
+        } else if (quantity_in_stock !== undefined) {
+            // Absolute value
+            updateData.quantity_in_stock = Number(quantity_in_stock);
+        } else {
+            return res.status(400).json({ error: 'Provide quantity_in_stock or adjustment' });
+        }
+
+        await productRef.update(updateData);
+        const updatedDoc = await productRef.get();
+
+        return res.json({
+            success: true,
+            message: 'Stock updated successfully',
+            product: { id: updatedDoc.id, ...updatedDoc.data() }
+        });
+    } catch (err) {
+        console.error('Update stock error:', err);
+        return res.status(500).json({ error: 'Failed to update stock', details: err.message });
+    }
+});
+
+// =====================================================
+// 12.1 - PRODUCT MANAGER: Category Management
+// =====================================================
+
+// GET /categories - Get all categories
+// Query param: ?include_empty=true to include categories without products
+app.get('/categories', async (req, res) => {
+    try {
+        const includeEmpty = req.query.include_empty === 'true';
+        
+        // Get categories from products (these have actual products)
+        const snapshot = await db.collection('products').get();
+        const productCategories = new Set();
+        
+        snapshot.forEach(doc => {
+            const category = doc.data().category;
+            if (category) productCategories.add(category);
+        });
+
+        // If include_empty, also add categories from categories collection
+        if (includeEmpty) {
+            try {
+                const categoriesSnapshot = await db.collection('categories').get();
+                categoriesSnapshot.forEach(doc => {
+                    const catName = doc.data().name;
+                    if (catName) productCategories.add(catName);
+                });
+            } catch (e) {
+                // Categories collection might not exist
+            }
+        }
+
+        const categories = Array.from(productCategories).sort();
+
+        return res.json({ categories });
+    } catch (err) {
+        console.error('Get categories error:', err);
+        return res.status(500).json({ error: 'Failed to fetch categories' });
+    }
+});
+
+// POST /categories - Add new category
+app.post('/categories', authenticate, authorize(['product_manager', 'admin']), async (req, res) => {
+    try {
+        const { name, description } = req.body;
+
+        if (!name) {
+            return res.status(400).json({ error: 'Category name is required' });
+        }
+
+        // Check if category already exists
+        const existingSnapshot = await db.collection('categories')
+            .where('name', '==', name)
+            .get();
+
+        if (!existingSnapshot.empty) {
+            return res.status(400).json({ error: 'Category already exists' });
+        }
+
+        const newCategory = {
+            name,
+            description: description || '',
+            created_at: FieldValue.serverTimestamp()
+        };
+
+        const docRef = await db.collection('categories').add(newCategory);
+
+        return res.status(201).json({
+            success: true,
+            message: 'Category created successfully',
+            category: { id: docRef.id, ...newCategory }
+        });
+    } catch (err) {
+        console.error('Create category error:', err);
+        return res.status(500).json({ error: 'Failed to create category', details: err.message });
+    }
+});
+
+// DELETE /categories/:name - Remove category
+app.delete('/categories/:name', authenticate, authorize(['product_manager', 'admin']), async (req, res) => {
+    try {
+        const { name } = req.params;
+
+        // Find and delete the category
+        const snapshot = await db.collection('categories')
+            .where('name', '==', decodeURIComponent(name))
+            .get();
+
+        if (snapshot.empty) {
+            return res.status(404).json({ error: 'Category not found' });
+        }
+
+        const batch = db.batch();
+        snapshot.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
+
+        return res.json({
+            success: true,
+            message: 'Category deleted successfully'
+        });
+    } catch (err) {
+        console.error('Delete category error:', err);
+        return res.status(500).json({ error: 'Failed to delete category', details: err.message });
+    }
+});
+
+// =====================================================
+// 12.2 & 12.3 - PRODUCT MANAGER: Delivery List with Full Details
+// =====================================================
+
+// GET /deliveries - Get delivery list with all required fields (12.3)
+app.get('/deliveries', authenticate, authorize(['product_manager', 'admin']), async (req, res) => {
+    try {
+        const snapshot = await db.collection('orders')
+            .where('status', 'in', ['processing', 'in-transit', 'delivered'])
+            .get();
+
+        const deliveries = snapshot.docs.map(doc => {
+            const data = doc.data();
+            const items = data.items || [];
+            
+            return {
+                delivery_id: doc.id,
+                order_id: data.order_id || doc.id,
+                customer_id: data.user_id,
+                items: items.map(item => ({
+                    product_id: item.product_id,
+                    quantity: item.quantity,
+                    unit_price: item.unit_price || 0
+                })),
+                total_price: data.total_amount || 0,
+                delivery_address: data.delivery_address || 'N/A',
+                status: data.status,
+                completion_status: data.status === 'delivered' ? 'completed' : 'pending',
+                created_at: data.created_at,
+                updated_at: data.updated_at
+            };
+        });
+
+        // Sort by status priority
+        deliveries.sort((a, b) => {
+            const statusPriority = { 'processing': 1, 'in-transit': 2, 'delivered': 3 };
+            return (statusPriority[a.status] || 999) - (statusPriority[b.status] || 999);
+        });
+
+        return res.json({ deliveries, count: deliveries.length });
+    } catch (err) {
+        console.error('Get deliveries error:', err);
+        return res.status(500).json({ error: 'Failed to fetch deliveries' });
     }
 });
 

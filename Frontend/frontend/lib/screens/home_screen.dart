@@ -20,6 +20,7 @@ import 'invoice_management_page.dart';
 import 'revenue_management_page.dart';
 import 'wishlist_page.dart';
 import 'customer_information_page.dart';
+import 'stock_management_page.dart';
 // Product Detail Page
 
 // ==========================================
@@ -57,13 +58,25 @@ String getCategoryNames(Map<String, dynamic> product) {
     10: 'Books',
   };
   List<String> names = [];
+  
+  // Check category_ids (array of IDs)
   if (product['category_ids'] is List) {
     for (var id in product['category_ids']) {
       if (idToName.containsKey(id)) names.add(idToName[id]!);
     }
-  } else if (product['category_id'] != null) {
+  } 
+  // Check category_id (single ID)
+  else if (product['category_id'] != null) {
     int? id = int.tryParse(product['category_id'].toString());
     if (id != null && idToName.containsKey(id)) names.add(idToName[id]!);
+  }
+  
+  // Check category (direct name for dynamic categories)
+  if (product['category'] != null && product['category'].toString().isNotEmpty) {
+    final catName = product['category'].toString();
+    if (!names.contains(catName)) {
+      names.add(catName);
+    }
   }
 
   if (names.isEmpty) return 'General';
@@ -103,6 +116,9 @@ class _StoreLayoutState extends State<StoreLayout> {
   bool _showSuggestions = false;
   Set<String> _hoveredCategories = {};
   
+  // Dynamic categories from backend
+  List<String> _dynamicCategories = [];
+  
   // Notification state (11.3)
   int _unreadNotificationCount = 0;
   List<dynamic> _notifications = [];
@@ -113,6 +129,7 @@ class _StoreLayoutState extends State<StoreLayout> {
     super.initState();
     _loadDataForSuggestions();
     _loadNotifications();
+    _loadDynamicCategories();
     // Initialize _lastLoadedUserId to track current user on first load
     final authService = AuthService();
     _lastLoadedUserId = authService.currentUser?['id']?.toString() ??
@@ -396,6 +413,19 @@ class _StoreLayoutState extends State<StoreLayout> {
     } catch (e) {}
   }
 
+  Future<void> _loadDynamicCategories() async {
+    try {
+      final categories = await _apiService.getCategories();
+      if (mounted) {
+        setState(() {
+          _dynamicCategories = categories;
+        });
+      }
+    } catch (e) {
+      print("Error loading categories: $e");
+    }
+  }
+
   void _onSearchChanged(String value) {
     final query = value.trim().toLowerCase();
     setState(() {
@@ -611,6 +641,18 @@ class _StoreLayoutState extends State<StoreLayout> {
                     if (isLoggedIn) ...[
                       if (userRole == 'product_manager')
                         _buildDrawerItem(
+                          icon: Icons.inventory_2_rounded,
+                          title: 'Product & Stock Management',
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => StockManagementPage()),
+                            );
+                          },
+                        ),
+                      if (userRole == 'product_manager')
+                        _buildDrawerItem(
                           icon: Icons.local_shipping_rounded,
                           title: 'Delivery Queue',
                           onTap: () {
@@ -630,6 +672,18 @@ class _StoreLayoutState extends State<StoreLayout> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(builder: (context) => ReviewModerationPage()),
+                            );
+                          },
+                        ),
+                      if (userRole == 'product_manager')
+                        _buildDrawerItem(
+                          icon: Icons.receipt_long_rounded,
+                          title: 'View Invoices',
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => InvoiceManagementPage()),
                             );
                           },
                         ),
@@ -1068,11 +1122,25 @@ class _StoreLayoutState extends State<StoreLayout> {
                           builder: (context) => OrderHistoryPage(),
                         ),
                       );
+                    } else if (value == 'stock_management') {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => StockManagementPage(),
+                        ),
+                      );
                     } else if (value == 'delivery') {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (context) => ProductManagerPage(),
+                        ),
+                      );
+                    } else if (value == 'pm_invoices') {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => InvoiceManagementPage(),
                         ),
                       );
                     } else if (value == 'reviews') {
@@ -1164,6 +1232,20 @@ class _StoreLayoutState extends State<StoreLayout> {
                       if (role == 'product_manager') ...[
                         const PopupMenuDivider(),
                         const PopupMenuItem<String>(
+                          value: 'stock_management',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.inventory_2,
+                                size: 18,
+                                color: Colors.green,
+                              ),
+                              SizedBox(width: 8),
+                              Text('Product & Stock Management'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem<String>(
                           value: 'delivery',
                           child: Row(
                             children: [
@@ -1188,6 +1270,20 @@ class _StoreLayoutState extends State<StoreLayout> {
                               ),
                               SizedBox(width: 8),
                               Text('Review Moderation'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem<String>(
+                          value: 'pm_invoices',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.receipt_long,
+                                size: 18,
+                                color: Colors.purple,
+                              ),
+                              SizedBox(width: 8),
+                              Text('View Invoices'),
                             ],
                           ),
                         ),
@@ -1272,7 +1368,8 @@ class _StoreLayoutState extends State<StoreLayout> {
   }
 
   Widget _buildNavBar() {
-    final labels = [
+    // Combine default categories with dynamic ones, avoiding duplicates
+    final defaultLabels = [
       'Electronics',
       'Computers',
       'Phones',
@@ -1284,6 +1381,16 @@ class _StoreLayoutState extends State<StoreLayout> {
       'Home Appliances',
       'Sports',
     ];
+    
+    // Add dynamic categories that aren't already in default list
+    final Set<String> allLabelsSet = {...defaultLabels};
+    for (final cat in _dynamicCategories) {
+      if (!allLabelsSet.contains(cat)) {
+        allLabelsSet.add(cat);
+      }
+    }
+    final labels = allLabelsSet.toList();
+    
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1678,6 +1785,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final ApiService _apiService = ApiService();
   List<dynamic> _products = [];
   List<dynamic> _filteredProducts = [];
+  List<String> _dynamicCategories = [];
 
   String _appliedQuery = '';
   String? _selectedCategoryLabel;
@@ -1686,7 +1794,9 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentPage = 1;
   int _itemsPerPage = 18;
   final List<int> _itemsPerPageOptions = [9, 18, 24, 48, 72];
-  final Map<String, int> _categoryFilterIds = {
+  
+  // Default category mappings (will be extended with dynamic categories)
+  final Map<String, int> _defaultCategoryIds = {
     'Electronics': 1,
     'Wear': 2,
     'Home Appliances': 3,
@@ -1707,7 +1817,21 @@ class _HomeScreenState extends State<HomeScreen> {
     if (widget.initialCategory != null)
       _selectedCategoryLabel = widget.initialCategory;
     if (widget.initialSearch != null) _appliedQuery = widget.initialSearch!;
+    _loadCategories();
     _loadProducts();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final categories = await _apiService.getCategories();
+      if (mounted) {
+        setState(() {
+          _dynamicCategories = categories;
+        });
+      }
+    } catch (e) {
+      print("Error loading categories: $e");
+    }
   }
 
   Future<void> _loadProducts() async {
@@ -1772,9 +1896,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final label = _selectedCategoryLabel;
     if (label != null) {
-      final catId = _categoryFilterIds[label];
-      if (catId != null) {
-        results = results.where((product) {
+      final catId = _defaultCategoryIds[label];
+      results = results.where((product) {
+        // Check category_id (for default categories with IDs)
+        if (catId != null) {
           final multi = product['category_ids'];
           if (multi is List) {
             final ids = multi.map((e) => e.toString()).toList();
@@ -1783,9 +1908,13 @@ class _HomeScreenState extends State<HomeScreen> {
           final single = product['category_id'];
           if (single != null && single.toString() == catId.toString())
             return true;
-          return false;
-        }).toList();
-      }
+        }
+        // Check category name directly (for dynamic categories without IDs)
+        final categoryName = product['category']?.toString().toLowerCase();
+        if (categoryName != null && categoryName == label.toLowerCase())
+          return true;
+        return false;
+      }).toList();
     }
 
     final query = _appliedQuery.trim().toLowerCase();
