@@ -21,6 +21,9 @@ import 'revenue_management_page.dart';
 import 'wishlist_page.dart';
 import 'customer_information_page.dart';
 import 'stock_management_page.dart';
+import 'support_agent_home.dart';
+import 'chat_queue_page.dart';
+import 'customer_chat_page.dart';
 // Product Detail Page
 
 // ==========================================
@@ -518,6 +521,19 @@ class _StoreLayoutState extends State<StoreLayout> {
               ),
             ],
           ),
+          // Support button - available for all users (guests and logged-in)
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => CustomerChatPage()),
+              );
+            },
+            icon: Icon(Icons.chat_bubble_outline),
+            label: Text('Support'),
+            backgroundColor: Theme.of(context).primaryColor,
+            foregroundColor: Colors.white,
+          ),
         );
       },
     );
@@ -744,6 +760,30 @@ class _StoreLayoutState extends State<StoreLayout> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(builder: (context) => RefundManagementPage()),
+                            );
+                          },
+                        ),
+                      ],
+                      if (userRole == 'support_agent') ...[
+                        _buildDrawerItem(
+                          icon: Icons.support_agent_rounded,
+                          title: 'Support Agent Dashboard',
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => SupportAgentHome()),
+                            );
+                          },
+                        ),
+                        _buildDrawerItem(
+                          icon: Icons.chat_bubble_outline_rounded,
+                          title: 'Chat Queue',
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => ChatQueuePage()),
                             );
                           },
                         ),
