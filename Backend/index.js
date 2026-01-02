@@ -10,7 +10,7 @@ app.use(express.json());
 const admin = require('firebase-admin');
 const JWT_SECRET = process.env.JWT_SECRET || 'cs308-secret-key-change-in-production';
 
-const serviceAccountPath = process.env.SERVICE_ACCOUNT_PATH || './cs308db-firebase-adminsdk-fbsvc-3a93f74bd8.json';
+const serviceAccountPath = process.env.SERVICE_ACCOUNT_PATH || './my-firebase.json';
 if (admin.apps.length === 0) {
     if (serviceAccountPath) {
         const serviceAccount = require(serviceAccountPath);
@@ -213,6 +213,67 @@ function authorize(allowedRoles = []) {
         if (allowedRoles.includes(req.user.role)) return next();
         return res.status(403).json({ error: 'Forbidden - insufficient role' });
     };
+}
+
+// Optional authenticate - tries to authenticate but doesn't fail if no token
+function optionalAuthenticate(req, res, next) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        // No token provided, continue as guest
+        req.user = null;
+        return next();
+    }
+
+    const token = authHeader.substring(7);
+
+    // Try seeded user first (user_id as token)
+    if (/^\d+$/.test(token)) {
+        db.collection('users').doc(token).get()
+            .then(doc => {
+                if (doc.exists) {
+                    req.user = { uid: token, role: doc.data().role || 'customer' };
+                } else {
+                    req.user = null;
+                }
+                return next();
+            })
+            .catch(() => {
+                req.user = null;
+                return next();
+            });
+        return;
+    }
+
+    // Try JWT
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        req.user = {
+            uid: decoded.user_id,
+            user_id: decoded.user_id,
+            role: decoded.role,
+            email: decoded.email,
+            ...decoded
+        };
+        return next();
+    } catch (jwtErr) {
+        // Try Firebase token
+        admin.auth().verifyIdToken(token)
+            .then(async (decoded) => {
+                req.user = { uid: decoded.uid, claims: decoded };
+                try {
+                    const doc = await db.collection('users').doc(decoded.uid).get();
+                    if (doc.exists) {
+                        req.user.role = doc.data().role || decoded.role || null;
+                    }
+                } catch (e) { }
+                next();
+            })
+            .catch(() => {
+                // Invalid token, continue as guest
+                req.user = null;
+                next();
+            });
+    }
 }
 
 app.get('/health', (req, res) => {
@@ -3707,6 +3768,558 @@ app.get('/deliveries', authenticate, authorize(['product_manager', 'admin']), as
     } catch (err) {
         console.error('Get deliveries error:', err);
         return res.status(500).json({ error: 'Failed to fetch deliveries' });
+    }
+});
+
+// ==================== LIVE CHAT ENDPOINTS ====================
+
+// Customer initiates a chat (guest or logged-in)
+app.post('/chat/initiate', optionalAuthenticate, async (req, res) => {
+    try {
+        const { customerName, customerEmail } = req.body;
+        const userId = req.user?.uid || null; // null if guest
+
+        // Build chat data object, only including defined values
+        const chatData = {
+            status: 'active', // active, claimed, closed
+            createdAt: FieldValue.serverTimestamp(),
+            lastMessageAt: FieldValue.serverTimestamp()
+        };
+
+        // Add userId if logged in
+        if (userId) {
+            chatData.userId = userId;
+        }
+
+        // Add guest info if not logged in
+        if (!userId) {
+            if (customerName) chatData.customerName = customerName;
+            if (customerEmail) chatData.customerEmail = customerEmail;
+        }
+
+        // Create a new chat conversation
+        const chatRef = await db.collection('chats').add(chatData);
+
+        return res.status(201).json({
+            chatId: chatRef.id,
+            message: 'Chat initiated successfully'
+        });
+    } catch (err) {
+        console.error('Chat initiate error:', err);
+        return res.status(500).json({ error: 'Failed to initiate chat' });
+    }
+});
+
+// Customer sends a message (with optional file attachments)
+app.post('/chat/:chatId/messages', optionalAuthenticate, async (req, res) => {
+    try {
+        const { chatId } = req.params;
+        const { message, attachments } = req.body; // attachments: [{url, type, name}]
+        const userId = req.user?.uid || null;
+
+        // Verify chat exists
+        const chatDoc = await db.collection('chats').doc(chatId).get();
+        if (!chatDoc.exists) {
+            return res.status(404).json({ error: 'Chat not found' });
+        }
+
+        const chatData = chatDoc.data();
+
+        // Prevent sending messages to closed chats
+        if (chatData.status === 'closed') {
+            return res.status(400).json({ error: 'Cannot send messages to a closed chat' });
+        }
+
+        // Add message to messages subcollection
+        const messageRef = await db.collection('chats').doc(chatId).collection('messages').add({
+            senderId: userId,
+            sender: 'customer', // customer or support
+            senderType: 'customer', // customer or agent
+            message: message || '',
+            attachments: attachments || [],
+            createdAt: FieldValue.serverTimestamp(),
+            read: false
+        });
+
+        // Update chat's lastMessageAt
+        await db.collection('chats').doc(chatId).update({
+            lastMessageAt: FieldValue.serverTimestamp()
+        });
+
+        return res.status(201).json({
+            messageId: messageRef.id,
+            message: 'Message sent successfully'
+        });
+    } catch (err) {
+        console.error('Send message error:', err);
+        return res.status(500).json({ error: 'Failed to send message' });
+    }
+});
+
+// Customer retrieves chat messages
+app.get('/chat/:chatId/messages', optionalAuthenticate, async (req, res) => {
+    try {
+        const { chatId } = req.params;
+        const userId = req.user?.uid || null;
+
+        // Verify chat exists
+        const chatDoc = await db.collection('chats').doc(chatId).get();
+        if (!chatDoc.exists) {
+            return res.status(404).json({ error: 'Chat not found' });
+        }
+
+        const chatData = chatDoc.data();
+
+        // Verify user has access to this chat (either their chat or they're the assigned agent)
+        if (userId && chatData.userId !== userId && chatData.claimedBy !== userId) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        // Get all messages
+        const messagesSnapshot = await db.collection('chats')
+            .doc(chatId)
+            .collection('messages')
+            .orderBy('createdAt', 'asc')
+            .get();
+
+        const messages = messagesSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate()
+        }));
+
+        return res.json({
+            messages,
+            chatStatus: chatData.status || 'active'
+        });
+    } catch (err) {
+        console.error('Get messages error:', err);
+        return res.status(500).json({ error: 'Failed to fetch messages' });
+    }
+});
+
+// Upload file for chat attachment
+app.post('/chat/upload', async (req, res) => {
+    try {
+        const { fileName, fileData, mimeType } = req.body;
+
+        if (!fileName || !fileData) {
+            return res.status(400).json({ error: 'fileName and fileData required' });
+        }
+
+        // Decode base64 file data
+        const buffer = Buffer.from(fileData, 'base64');
+
+        // Generate unique filename
+        const timestamp = Date.now();
+        const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const storagePath = `chat-attachments/${timestamp}_${sanitizedFileName}`;
+
+        // Upload to Firebase Storage
+        const file = bucket.file(storagePath);
+        await file.save(buffer, {
+            metadata: {
+                contentType: mimeType || 'application/octet-stream'
+            }
+        });
+
+        // Generate signed URL (valid for 7 days)
+        const [url] = await file.getSignedUrl({
+            action: 'read',
+            expires: Date.now() + 7 * 24 * 60 * 60 * 1000
+        });
+
+        return res.json({
+            url,
+            fileName: sanitizedFileName,
+            mimeType: mimeType || 'application/octet-stream'
+        });
+    } catch (err) {
+        console.error('File upload error:', err);
+        return res.status(500).json({ error: 'Failed to upload file' });
+    }
+});
+
+// Customer: Get my chats (both active and history)
+app.get('/chat/my-chats', optionalAuthenticate, async (req, res) => {
+    try {
+        const userId = req.user?.uid || null;
+        const { email } = req.query; // For guest users
+
+        if (!userId && !email) {
+            return res.status(400).json({ error: 'User not authenticated and no email provided' });
+        }
+
+        let chatsSnapshot;
+
+        if (userId) {
+            // Get chats for logged-in user
+            chatsSnapshot = await db.collection('chats')
+                .where('userId', '==', userId)
+                .orderBy('lastMessageAt', 'desc')
+                .get();
+        } else {
+            // Get chats for guest user by email
+            chatsSnapshot = await db.collection('chats')
+                .where('customerEmail', '==', email)
+                .orderBy('lastMessageAt', 'desc')
+                .get();
+        }
+
+        const chats = await Promise.all(chatsSnapshot.docs.map(async doc => {
+            const chatData = doc.data();
+
+            // Get last message
+            const lastMessageSnapshot = await db.collection('chats')
+                .doc(doc.id)
+                .collection('messages')
+                .orderBy('createdAt', 'desc')
+                .limit(1)
+                .get();
+
+            let lastMessage = null;
+            if (!lastMessageSnapshot.empty) {
+                const msgData = lastMessageSnapshot.docs[0].data();
+                lastMessage = {
+                    text: msgData.message || '',
+                    sender: msgData.sender || '',
+                    createdAt: msgData.createdAt?.toDate()
+                };
+            }
+
+            // Count unread messages (messages from support agent that customer hasn't read)
+            const unreadSnapshot = await db.collection('chats')
+                .doc(doc.id)
+                .collection('messages')
+                .where('sender', '==', 'support')
+                .where('read', '==', false)
+                .get();
+
+            return {
+                id: doc.id,
+                status: chatData.status,
+                createdAt: chatData.createdAt?.toDate(),
+                lastMessageAt: chatData.lastMessageAt?.toDate(),
+                claimedBy: chatData.claimedBy || null,
+                lastMessage,
+                unreadCount: unreadSnapshot.size
+            };
+        }));
+
+        return res.json({ chats });
+    } catch (err) {
+        console.error('Get my chats error:', err);
+        return res.status(500).json({ error: 'Failed to fetch chats' });
+    }
+});
+
+// Support Agent: View chat queue (all active chats)
+app.get('/support/chats/queue', authenticate, authorize(['support_agent', 'admin']), async (req, res) => {
+    try {
+        const chatsSnapshot = await db.collection('chats')
+            .where('status', 'in', ['active', 'claimed'])
+            .orderBy('lastMessageAt', 'desc')
+            .get();
+
+        const chats = await Promise.all(chatsSnapshot.docs.map(async doc => {
+            const chatData = doc.data();
+            let customerInfo = {
+                name: chatData.customerName || 'Guest',
+                email: chatData.customerEmail || null
+            };
+
+            // If logged-in customer, fetch their profile
+            if (chatData.userId) {
+                const userDoc = await db.collection('users').doc(chatData.userId).get();
+                if (userDoc.exists) {
+                    const userData = userDoc.data();
+                    customerInfo = {
+                        name: userData.name || 'Customer',
+                        email: userData.email || null,
+                        userId: chatData.userId
+                    };
+                }
+            }
+
+            // Get last message
+            const lastMsgSnapshot = await db.collection('chats')
+                .doc(doc.id)
+                .collection('messages')
+                .orderBy('createdAt', 'desc')
+                .limit(1)
+                .get();
+
+            const lastMessage = lastMsgSnapshot.empty ? null : {
+                ...lastMsgSnapshot.docs[0].data(),
+                createdAt: lastMsgSnapshot.docs[0].data().createdAt?.toDate()
+            };
+
+            // Get unread count
+            const unreadSnapshot = await db.collection('chats')
+                .doc(doc.id)
+                .collection('messages')
+                .where('senderType', '==', 'customer')
+                .where('read', '==', false)
+                .get();
+
+            return {
+                id: doc.id,
+                ...chatData,
+                customerInfo,
+                lastMessage,
+                unreadCount: unreadSnapshot.size,
+                createdAt: chatData.createdAt?.toDate(),
+                lastMessageAt: chatData.lastMessageAt?.toDate(),
+                claimedAt: chatData.claimedAt?.toDate()
+            };
+        }));
+
+        return res.json({ chats });
+    } catch (err) {
+        console.error('Get chat queue error:', err);
+        return res.status(500).json({ error: 'Failed to fetch chat queue' });
+    }
+});
+
+// Support Agent: Claim a chat from the queue
+app.post('/support/chats/:chatId/claim', authenticate, authorize(['support_agent', 'admin']), async (req, res) => {
+    try {
+        const { chatId } = req.params;
+        const agentId = req.user.uid;
+
+        const chatRef = db.collection('chats').doc(chatId);
+        const chatDoc = await chatRef.get();
+
+        if (!chatDoc.exists) {
+            return res.status(404).json({ error: 'Chat not found' });
+        }
+
+        const chatData = chatDoc.data();
+
+        // Check if already claimed
+        if (chatData.claimedBy && chatData.claimedBy !== agentId) {
+            return res.status(409).json({ error: 'Chat already claimed by another agent' });
+        }
+
+        // Claim the chat
+        await chatRef.update({
+            status: 'claimed',
+            claimedBy: agentId,
+            claimedAt: FieldValue.serverTimestamp()
+        });
+
+        return res.json({ message: 'Chat claimed successfully' });
+    } catch (err) {
+        console.error('Claim chat error:', err);
+        return res.status(500).json({ error: 'Failed to claim chat' });
+    }
+});
+
+// Support Agent: Send a response
+app.post('/support/chats/:chatId/respond', authenticate, authorize(['support_agent', 'admin']), async (req, res) => {
+    try {
+        const { chatId } = req.params;
+        const { message, attachments } = req.body;
+        const agentId = req.user.uid;
+
+        const chatRef = db.collection('chats').doc(chatId);
+        const chatDoc = await chatRef.get();
+
+        if (!chatDoc.exists) {
+            return res.status(404).json({ error: 'Chat not found' });
+        }
+
+        const chatData = chatDoc.data();
+
+        // Verify agent has claimed this chat
+        if (chatData.claimedBy !== agentId) {
+            return res.status(403).json({ error: 'You must claim this chat first' });
+        }
+
+        // Add agent response to messages
+        const messageRef = await db.collection('chats').doc(chatId).collection('messages').add({
+            senderId: agentId,
+            sender: 'support', // customer or support
+            senderType: 'agent',
+            message: message || '',
+            attachments: attachments || [],
+            createdAt: FieldValue.serverTimestamp(),
+            read: false
+        });
+
+        // Update chat's lastMessageAt
+        await chatRef.update({
+            lastMessageAt: FieldValue.serverTimestamp()
+        });
+
+        return res.status(201).json({
+            messageId: messageRef.id,
+            message: 'Response sent successfully'
+        });
+    } catch (err) {
+        console.error('Send response error:', err);
+        return res.status(500).json({ error: 'Failed to send response' });
+    }
+});
+
+// Support Agent: Get customer context (if logged in)
+app.get('/support/chats/:chatId/customer-context', authenticate, authorize(['support_agent', 'admin']), async (req, res) => {
+    try {
+        const { chatId } = req.params;
+        const agentId = req.user.uid;
+
+        const chatDoc = await db.collection('chats').doc(chatId).get();
+        if (!chatDoc.exists) {
+            return res.status(404).json({ error: 'Chat not found' });
+        }
+
+        const chatData = chatDoc.data();
+
+        // Verify agent has claimed this chat
+        if (chatData.claimedBy !== agentId) {
+            return res.status(403).json({ error: 'You must claim this chat first' });
+        }
+
+        if (!chatData.userId) {
+            return res.json({
+                isGuest: true,
+                customerName: chatData.customerName,
+                customerEmail: chatData.customerEmail
+            });
+        }
+
+        // Get customer profile
+        const userDoc = await db.collection('users').doc(chatData.userId).get();
+        if (!userDoc.exists) {
+            return res.status(404).json({ error: 'Customer not found' });
+        }
+
+        const userData = userDoc.data();
+
+        // Get customer's recent orders (try both created_at and createdAt fields)
+        let ordersSnapshot;
+        try {
+            ordersSnapshot = await db.collection('orders')
+                .where('user_id', '==', chatData.userId)
+                .orderBy('created_at', 'desc')
+                .limit(5)
+                .get();
+        } catch (e) {
+            // If created_at index doesn't exist, try without ordering
+            console.log('Orders query with created_at failed, trying without order:', e.message);
+            ordersSnapshot = await db.collection('orders')
+                .where('user_id', '==', chatData.userId)
+                .limit(5)
+                .get();
+        }
+
+        const orders = ordersSnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                created_at: data.created_at?.toDate ? data.created_at.toDate() : data.created_at,
+                createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt
+            };
+        });
+
+        // Get customer's cart
+        const cartSnapshot = await db.collection('cart')
+            .where('user_id', '==', chatData.userId)
+            .get();
+
+        const cartItems = cartSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+
+        // Get customer's wishlist
+        const wishlistSnapshot = await db.collection('wishlists')
+            .where('user_id', '==', chatData.userId)
+            .get();
+
+        const wishlistItems = wishlistSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+
+        return res.json({
+            isGuest: false,
+            profile: {
+                uid: chatData.userId,
+                name: userData.name,
+                email: userData.email,
+                role: userData.role,
+                created_at: userData.created_at?.toDate ? userData.created_at.toDate() : userData.created_at
+            },
+            recentOrders: orders,
+            cart: cartItems,
+            wishlist: wishlistItems
+        });
+    } catch (err) {
+        console.error('Get customer context error:', err);
+        return res.status(500).json({ error: 'Failed to fetch customer context' });
+    }
+});
+
+// Support Agent: Close a chat
+app.put('/support/chats/:chatId/close', authenticate, authorize(['support_agent', 'admin']), async (req, res) => {
+    try {
+        const { chatId } = req.params;
+        const agentId = req.user.uid;
+
+        const chatRef = db.collection('chats').doc(chatId);
+        const chatDoc = await chatRef.get();
+
+        if (!chatDoc.exists) {
+            return res.status(404).json({ error: 'Chat not found' });
+        }
+
+        const chatData = chatDoc.data();
+
+        // Verify agent has claimed this chat
+        if (chatData.claimedBy !== agentId) {
+            return res.status(403).json({ error: 'You can only close chats you have claimed' });
+        }
+
+        await chatRef.update({
+            status: 'closed',
+            closedAt: FieldValue.serverTimestamp()
+        });
+
+        return res.json({ message: 'Chat closed successfully' });
+    } catch (err) {
+        console.error('Close chat error:', err);
+        return res.status(500).json({ error: 'Failed to close chat' });
+    }
+});
+
+// Mark messages as read
+app.put('/chat/:chatId/messages/read', async (req, res) => {
+    try {
+        const { chatId } = req.params;
+        const { messageIds } = req.body; // array of message IDs to mark as read
+        const userId = req.user?.uid || null;
+
+        if (!messageIds || !Array.isArray(messageIds)) {
+            return res.status(400).json({ error: 'messageIds array required' });
+        }
+
+        // Update messages in batch
+        const batch = db.batch();
+        for (const messageId of messageIds) {
+            const messageRef = db.collection('chats')
+                .doc(chatId)
+                .collection('messages')
+                .doc(messageId);
+            batch.update(messageRef, { read: true });
+        }
+        await batch.commit();
+
+        return res.json({ message: 'Messages marked as read' });
+    } catch (err) {
+        console.error('Mark messages read error:', err);
+        return res.status(500).json({ error: 'Failed to mark messages as read' });
     }
 });
 
