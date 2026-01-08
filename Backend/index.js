@@ -3296,15 +3296,15 @@ app.get('/users/:uid/info', authenticate, async (req, res) => {
         }
         
         const userData = userDoc.data();
-        
-        // Return user info (including password for viewing/editing on My Information page)
+
+        // Decrypt sensitive fields before sending
         return res.json({
             id: userDoc.id,
             user_id: userData.user_id,
             name: userData.name || '',
-            email: userData.email || '',
-            address: userData.address || '',
-            taxID: userData.taxID || '',
+            email: decrypt(userData.email) || '',
+            address: decrypt(userData.address) || '',
+            taxID: decrypt(userData.taxID) || '',
             role: userData.role || 'customer',
             created_at: userData.created_at || null
         });
@@ -3346,28 +3346,29 @@ app.put('/users/:uid/info', authenticate, async (req, res) => {
             if (!emailRegex.test(email)) {
                 return res.status(400).json({ error: 'Invalid email format' });
             }
-            
-            // Check if email is already used by another user
-            const emailCheck = await db.collection('users')
-                .where('email', '==', email)
-                .limit(1)
-                .get();
-            
-            if (!emailCheck.empty && emailCheck.docs[0].id !== String(uid)) {
-                return res.status(409).json({ error: 'Email already registered' });
+
+            // Check if email is already used by another user (need to decrypt all to check)
+            const allUsers = await db.collection('users').get();
+            for (const doc of allUsers.docs) {
+                if (doc.id !== String(uid)) {
+                    const existingEmail = decrypt(doc.data().email);
+                    if (existingEmail === email) {
+                        return res.status(409).json({ error: 'Email already registered' });
+                    }
+                }
             }
-            
-            updates.email = email;
+
+            updates.email = encrypt(email); // Encrypt email before saving
         }
-        
+
         // Update address if provided
         if (address !== undefined) {
-            updates.address = address;
+            updates.address = encrypt(address); // Encrypt address before saving
         }
-        
+
         // Update taxID if provided
         if (taxID !== undefined) {
-            updates.taxID = taxID;
+            updates.taxID = encrypt(taxID); // Encrypt taxID before saving
         }
         
         // Update password if provided
@@ -3396,9 +3397,9 @@ app.put('/users/:uid/info', authenticate, async (req, res) => {
                 id: updatedDoc.id,
                 user_id: updatedData.user_id,
                 name: updatedData.name || '',
-                email: updatedData.email || '',
-                address: updatedData.address || '',
-                taxID: updatedData.taxID || '',
+                email: decrypt(updatedData.email) || '', // Decrypt for response
+                address: decrypt(updatedData.address) || '', // Decrypt for response
+                taxID: decrypt(updatedData.taxID) || '', // Decrypt for response
                 role: updatedData.role || 'customer'
             }
         });
