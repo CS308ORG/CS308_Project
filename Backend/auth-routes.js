@@ -3,6 +3,7 @@
 
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { encrypt, decrypt, encryptFields, decryptFields } = require('./encryption');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'cs308-secret-key-change-in-production';
 const JWT_EXPIRES_IN = '24h';
@@ -59,16 +60,19 @@ module.exports = function(app, db) {
     }
     
     async function findUserByEmail(email) {
-        const snapshot = await db.collection('users')
-            .where('email', '==', email)
-            .limit(1)
-            .get();
-        
-        if (snapshot.empty) {
-            return null;
+        // Since email is encrypted, we need to fetch all users and decrypt to find match
+        const snapshot = await db.collection('users').get();
+
+        for (const doc of snapshot.docs) {
+            const userData = doc.data();
+            const decryptedEmail = decrypt(userData.email);
+
+            if (decryptedEmail === email) {
+                return { id: doc.id, ...userData };
+            }
         }
-        
-        return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+
+        return null;
     }
     
     async function findUserById(userId) {
@@ -142,21 +146,21 @@ module.exports = function(app, db) {
             const newUser = {
                 user_id: userId,
                 name: name,
-                email: email,
+                email: encrypt(email), // Encrypt email
                 password: hashedPassword,
-                address: address || '',
+                address: encrypt(address || ''), // Encrypt address
                 role: 'customer',
                 created_at: new Date().toISOString()
             };
-            
+
             // Firestore'a kaydet
             await db.collection('users').doc(String(userId)).set(newUser);
-            
+
             // Signup log'u kaydet
             const signupLog = {
                 signup_id: Date.now(),
                 user_id: userId,
-                email: email,
+                email: encrypt(email), // Encrypt email in logs
                 timestamp: new Date().toISOString(),
                 method: 'email_password'
             };
@@ -223,10 +227,10 @@ module.exports = function(app, db) {
                 const loginLog = {
                     login_id: Date.now(),
                     user_id: null,
-                    email: email,
+                    email: encrypt(email), // Encrypt email in logs
                     timestamp: new Date().toISOString(),
                     success: false,
-                    ip_address: req.ip || 'unknown'
+                    ip_address: encrypt(req.ip || 'unknown') // Encrypt IP address
                 };
                 await db.collection('login_logs').add(loginLog);
                 
@@ -245,10 +249,10 @@ module.exports = function(app, db) {
                 const loginLog = {
                     login_id: Date.now(),
                     user_id: user.user_id,
-                    email: email,
+                    email: encrypt(email), // Encrypt email in logs
                     timestamp: new Date().toISOString(),
                     success: false,
-                    ip_address: req.ip || 'unknown'
+                    ip_address: encrypt(req.ip || 'unknown') // Encrypt IP address
                 };
                 await db.collection('login_logs').add(loginLog);
                 
@@ -263,34 +267,37 @@ module.exports = function(app, db) {
             const loginLog = {
                 login_id: Date.now(),
                 user_id: user.user_id,
-                email: email,
+                email: encrypt(email), // Encrypt email in logs
                 timestamp: new Date().toISOString(),
                 success: true,
-                ip_address: req.ip || 'unknown'
+                ip_address: encrypt(req.ip || 'unknown') // Encrypt IP address
             };
             await db.collection('login_logs').add(loginLog);
             
-            // JWT token oluştur
+            // JWT token oluştur (decrypt sensitive fields for token and response)
+            const decryptedEmail = decrypt(user.email);
+            const decryptedAddress = decrypt(user.address);
+
             const token = jwt.sign(
-                { 
-                    user_id: user.user_id, 
-                    email: user.email, 
+                {
+                    user_id: user.user_id,
+                    email: decryptedEmail,
                     role: user.role,
                     name: user.name
                 },
                 JWT_SECRET,
                 { expiresIn: JWT_EXPIRES_IN }
             );
-            
+
             return res.status(200).json({
                 success: true,
                 message: 'Giriş başarılı',
                 data: {
                     user_id: user.user_id,
                     name: user.name,
-                    email: user.email,
+                    email: decryptedEmail, // Return decrypted email
                     role: user.role,
-                    address: user.address,
+                    address: decryptedAddress, // Return decrypted address
                     token: token
                 }
             });
