@@ -3304,7 +3304,6 @@ app.get('/users/:uid/info', authenticate, async (req, res) => {
             email: userData.email || '',
             address: userData.address || '',
             taxID: userData.taxID || '',
-            password: userData.password || '', // Include password for display
             role: userData.role || 'customer',
             created_at: userData.created_at || null
         });
