@@ -524,7 +524,8 @@ app.post('/checkout', async (req, res) => {
         try {
             const userDoc = await db.collection('users').doc(String(normalizedUserId)).get();
             if (userDoc.exists) {
-                deliveryAddress = userDoc.data().address || 'N/A';
+                const encryptedAddress = userDoc.data().address || 'N/A';
+                deliveryAddress = decrypt(encryptedAddress); // Decrypt address for order
             }
         } catch (err) {
             console.error('Error fetching user address for order:', err);
@@ -577,7 +578,7 @@ app.post('/checkout', async (req, res) => {
                 status: initialStatus,
                 total_amount: Number(computedTotal.toFixed(2)),
                 items: itemsWithPrice,
-                delivery_address: deliveryAddress, // Store current user address
+                delivery_address: encrypt(deliveryAddress), // Encrypt delivery address
                 created_at: FieldValue.serverTimestamp(),
                 date: FieldValue.serverTimestamp() // Use server timestamp for date too
             };
@@ -587,8 +588,9 @@ app.post('/checkout', async (req, res) => {
 
         try {
             const userDoc = await db.collection('users').doc(String(normalizedUserId)).get();
-            const userEmail = userDoc.exists ? userDoc.data().email : null;
-            if (userEmail && process.env.EMAIL_USER) {
+            const encryptedEmail = userDoc.exists ? userDoc.data().email : null;
+            if (encryptedEmail && process.env.EMAIL_USER) {
+                const userEmail = decrypt(encryptedEmail); // Decrypt email for sending
                 const pdfPath = await generateInvoicePDF(orderResult, userEmail);
                 await sendInvoiceEmail(userEmail, orderResult, pdfPath);
             }
@@ -831,7 +833,8 @@ app.get('/users/:uid/orders', authenticate, async (req, res) => {
         try {
             const userDoc = await db.collection('users').doc(String(uidQuery)).get();
             if (userDoc.exists) {
-                userCurrentAddress = userDoc.data().address || 'N/A';
+                const encryptedAddress = userDoc.data().address || 'N/A';
+                userCurrentAddress = decrypt(encryptedAddress); // Decrypt user address
             }
         } catch (err) {
             console.error('Error fetching user address:', err);
@@ -841,9 +844,10 @@ app.get('/users/:uid/orders', authenticate, async (req, res) => {
         for (const orderDoc of ordersSnapshot.docs) {
             const orderData = orderDoc.data();
             const orderId = orderData.order_id;
-            
-            // Get delivery_address without updating the order (to prevent unintended side effects)
+
+            // Get delivery_address and decrypt it
             let deliveryAddress = orderData.delivery_address || orderData.deliveryAddress || userCurrentAddress;
+            deliveryAddress = decrypt(deliveryAddress); // Decrypt delivery address
 
             let items = [];
             if (Array.isArray(orderData.items) && orderData.items.length) {
