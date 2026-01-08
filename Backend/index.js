@@ -1487,7 +1487,7 @@ app.post('/refunds/request', authenticate, async (req, res) => {
             if (userDoc.exists) {
                 const userData = userDoc.data();
                 customerName = userData.name || '';
-                customerEmail = userData.email || '';
+                customerEmail = decrypt(userData.email) || ''; // Decrypt email
             }
         } catch (err) {
             console.error('Error fetching user info for refund:', err);
@@ -1501,11 +1501,11 @@ app.post('/refunds/request', authenticate, async (req, res) => {
             product_id: Number(product_id),
             user_id: userId,
             customer_name: customerName, // Store customer name
-            customer_email: customerEmail, // Store customer email
+            customer_email: encrypt(customerEmail), // Encrypt customer email
             quantity: orderItem.quantity || 1,
             unit_price: orderItem.unit_price || 0, // Original price paid (with discount)
             total_refund_amount: (orderItem.unit_price || 0) * (orderItem.quantity || 1),
-            reason: reason || '',
+            reason: encrypt(reason || ''), // Encrypt refund reason
             status: 'requested',
             requested_at: FieldValue.serverTimestamp(),
             purchase_date: purchaseDate.toISOString(),
@@ -1514,10 +1514,17 @@ app.post('/refunds/request', authenticate, async (req, res) => {
 
         await db.collection('refunds').doc(String(refundId)).set(refundData);
 
+        // Decrypt sensitive data for response
+        const responseData = {
+            ...refundData,
+            customer_email: decrypt(refundData.customer_email),
+            reason: decrypt(refundData.reason)
+        };
+
         return res.status(201).json({
             success: true,
             message: 'Refund request submitted',
-            refund: refundData
+            refund: responseData
         });
     } catch (err) {
         console.error('Refund request error:', err);
@@ -1576,12 +1583,17 @@ app.get('/refunds', authenticate, authorize(['sales_manager', 'admin']), async (
                 refunds.push({
                     id: doc.id,
                     ...refundData,
+                    customer_email: decrypt(refundData.customer_email), // Decrypt customer email
+                    reason: decrypt(refundData.reason), // Decrypt reason
                     product: productDoc.exists ? productDoc.data() : null,
-                    order: orderDoc.exists ? orderDoc.data() : null,
+                    order: orderDoc.exists ? {
+                        ...orderDoc.data(),
+                        delivery_address: decrypt(orderDoc.data().delivery_address) // Decrypt delivery address
+                    } : null,
                     user: userDoc.exists ? {
                         name: userDoc.data().name,
-                        email: userDoc.data().email,
-                        address: userDoc.data().address
+                        email: decrypt(userDoc.data().email), // Decrypt user email
+                        address: decrypt(userDoc.data().address) // Decrypt user address
                     } : null,
                     requested_at: (() => {
                         try {
