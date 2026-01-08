@@ -33,6 +33,7 @@ const nodemailer = require('nodemailer');
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
+const { encrypt, decrypt, encryptFields, decryptFields } = require('./encryption');
 
 // Email transporter configuration
 let emailTransporter = null;
