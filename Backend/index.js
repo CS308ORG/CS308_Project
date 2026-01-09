@@ -409,15 +409,27 @@ app.post('/login', async (req, res) => {
         if (!email || !password) {
             return res.status(400).json({ error: 'Email and password are required' });
         }
-        const usersRef = db.collection('users');
-        const snapshot = await usersRef.where('email', '==', email).limit(1).get();
 
-        if (snapshot.empty) {
-            return res.status(401).json({ error: 'Invalid credentials' });
+        // Since email is encrypted, we need to fetch all users and decrypt to find match
+        const usersRef = db.collection('users');
+        const allUsers = await usersRef.get();
+
+        let userDoc = null;
+        let userData = null;
+
+        for (const doc of allUsers.docs) {
+            const data = doc.data();
+            const decryptedEmail = decrypt(data.email);
+            if (decryptedEmail === email) {
+                userDoc = doc;
+                userData = data;
+                break;
+            }
         }
 
-        const userDoc = snapshot.docs[0];
-        const userData = userDoc.data();
+        if (!userDoc || !userData) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
 
         let isPasswordValid = false;
         if (userData.password && userData.password.startsWith('$2b$')) {
@@ -430,11 +442,19 @@ app.post('/login', async (req, res) => {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
+        // Decrypt sensitive fields before sending response
         const { password: _, ...userWithoutPassword } = userData;
+        const decryptedUser = {
+            ...userWithoutPassword,
+            email: decrypt(userData.email),
+            address: decrypt(userData.address),
+            taxID: decrypt(userData.taxID)
+        };
+
         return res.json({
             success: true,
             message: 'Login successful',
-            user: { id: userDoc.id, ...userWithoutPassword }
+            user: { id: userDoc.id, ...decryptedUser }
         });
     } catch (err) {
         console.error('Login error:', err);
