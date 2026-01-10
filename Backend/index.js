@@ -5,7 +5,8 @@ const app = express();
 const jwt = require('jsonwebtoken');
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const admin = require('firebase-admin');
 const JWT_SECRET = process.env.JWT_SECRET || 'cs308-secret-key-change-in-production';
@@ -3977,6 +3978,55 @@ app.post('/chat/upload', async (req, res) => {
     }
 });
 
+// Upload product image
+app.post('/products/upload-image', authenticate, authorize(['product_manager', 'admin']), async (req, res) => {
+    try {
+        const { fileName, fileData, mimeType } = req.body;
+
+        if (!fileName || !fileData) {
+            return res.status(400).json({ error: 'fileName and fileData required' });
+        }
+
+        // Validate that it's an image
+        if (!mimeType || !mimeType.startsWith('image/')) {
+            return res.status(400).json({ error: 'Only image files are allowed' });
+        }
+
+        // Decode base64 file data
+        const buffer = Buffer.from(fileData, 'base64');
+
+        // Generate unique filename
+        const timestamp = Date.now();
+        const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const storagePath = `products/${timestamp}_${sanitizedFileName}`;
+
+        // Upload to Firebase Storage
+        const file = bucket.file(storagePath);
+        await file.save(buffer, {
+            metadata: {
+                contentType: mimeType
+            }
+        });
+
+        // Make the file publicly accessible
+        await file.makePublic();
+
+        // Get public URL
+        const publicUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
+
+        console.log('Product image uploaded:', publicUrl);
+
+        return res.json({
+            url: publicUrl,
+            fileName: sanitizedFileName,
+            mimeType: mimeType
+        });
+    } catch (err) {
+        console.error('Product image upload error:', err);
+        return res.status(500).json({ error: 'Failed to upload product image' });
+    }
+});
+
 // Customer: Get my chats (both active and history)
 app.get('/chat/my-chats', optionalAuthenticate, async (req, res) => {
     try {
@@ -4233,21 +4283,40 @@ app.get('/support/chats/:chatId/customer-context', authenticate, authorize(['sup
 
         const userData = userDoc.data();
 
-        // Get customer's recent orders (try both created_at and createdAt fields)
+        console.log('Getting customer context for user:', chatData.userId);
+
+        // Calculate date 30 days ago for filtering orders
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        // Get customer's orders from last 30 days
         let ordersSnapshot;
         try {
             ordersSnapshot = await db.collection('orders')
                 .where('user_id', '==', chatData.userId)
+                .where('created_at', '>=', thirtyDaysAgo)
                 .orderBy('created_at', 'desc')
-                .limit(5)
+                .limit(10)
                 .get();
+            console.log(`Found ${ordersSnapshot.docs.length} orders in last 30 days with created_at field`);
         } catch (e) {
-            // If created_at index doesn't exist, try without ordering
-            console.log('Orders query with created_at failed, trying without order:', e.message);
-            ordersSnapshot = await db.collection('orders')
-                .where('user_id', '==', chatData.userId)
-                .limit(5)
-                .get();
+            // If created_at index doesn't exist or field is missing, try without date filter
+            console.log('Orders query with created_at and date filter failed, trying without date filter:', e.message);
+            try {
+                ordersSnapshot = await db.collection('orders')
+                    .where('user_id', '==', chatData.userId)
+                    .orderBy('created_at', 'desc')
+                    .limit(10)
+                    .get();
+                console.log(`Found ${ordersSnapshot.docs.length} orders (no date filter, created_at ordered)`);
+            } catch (e2) {
+                console.log('Orders query with created_at orderBy failed, trying without ordering:', e2.message);
+                ordersSnapshot = await db.collection('orders')
+                    .where('user_id', '==', chatData.userId)
+                    .limit(10)
+                    .get();
+                console.log(`Found ${ordersSnapshot.docs.length} orders (no ordering)`);
+            }
         }
 
         const orders = ordersSnapshot.docs.map(doc => {
@@ -4260,6 +4329,8 @@ app.get('/support/chats/:chatId/customer-context', authenticate, authorize(['sup
             };
         });
 
+        console.log('Processed orders:', orders.length);
+
         // Get customer's cart
         const cartSnapshot = await db.collection('cart')
             .where('user_id', '==', chatData.userId)
@@ -4269,6 +4340,7 @@ app.get('/support/chats/:chatId/customer-context', authenticate, authorize(['sup
             id: doc.id,
             ...doc.data()
         }));
+        console.log('Cart items:', cartItems.length);
 
         // Get customer's wishlist
         const wishlistSnapshot = await db.collection('wishlists')
@@ -4279,8 +4351,9 @@ app.get('/support/chats/:chatId/customer-context', authenticate, authorize(['sup
             id: doc.id,
             ...doc.data()
         }));
+        console.log('Wishlist items:', wishlistItems.length);
 
-        return res.json({
+        const responseData = {
             isGuest: false,
             profile: {
                 uid: chatData.userId,
@@ -4292,7 +4365,10 @@ app.get('/support/chats/:chatId/customer-context', authenticate, authorize(['sup
             recentOrders: orders,
             cart: cartItems,
             wishlist: wishlistItems
-        });
+        };
+
+        console.log('Sending customer context response:', JSON.stringify(responseData, null, 2));
+        return res.json(responseData);
     } catch (err) {
         console.error('Get customer context error:', err);
         return res.status(500).json({ error: 'Failed to fetch customer context' });
