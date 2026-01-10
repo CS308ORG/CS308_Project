@@ -1,0 +1,4 @@
+[dotenv@17.2.3] injecting env (7) from .env -- tip: ⚙️  suppress all logs with { quiet: true }
+✅ Auth routes (Login-Sign Up) loaded successfully
+Server listening on http://localhost:3000
+✅ Email transporter verified successfully
