@@ -276,17 +276,24 @@ class ChatService {
         'Authorization': 'Bearer $token',
       };
 
+      print('ChatService: Fetching customer context from $baseUrl/support/chats/$chatId/customer-context');
       final response = await http.get(
         Uri.parse('$baseUrl/support/chats/$chatId/customer-context'),
         headers: headers,
       );
 
+      print('ChatService: Customer context response status: ${response.statusCode}');
+      print('ChatService: Customer context response body: ${response.body}');
+
       if (response.statusCode == 200) {
         return json.decode(response.body);
+      } else if (response.statusCode == 403) {
+        throw Exception('You must claim this chat first to view customer info');
       } else {
-        throw Exception('Failed to get customer context: ${response.body}');
+        throw Exception('Failed to get customer context (${response.statusCode}): ${response.body}');
       }
     } catch (e) {
+      print('ChatService: Error getting customer context: $e');
       throw Exception('Error getting customer context: $e');
     }
   }

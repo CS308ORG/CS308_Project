@@ -4,6 +4,10 @@ import 'chat_conversation_page.dart';
 import 'dart:async';
 
 class ChatQueuePage extends StatefulWidget {
+  final bool showClosed;
+
+  const ChatQueuePage({Key? key, this.showClosed = false}) : super(key: key);
+
   @override
   _ChatQueuePageState createState() => _ChatQueuePageState();
 }
@@ -125,7 +129,7 @@ class _ChatQueuePageState extends State<ChatQueuePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Live Chat Queue'),
+        title: Text(widget.showClosed ? 'Chat History' : 'Live Chat Queue'),
         actions: [
           IconButton(
             icon: Icon(Icons.refresh),
@@ -164,7 +168,7 @@ class _ChatQueuePageState extends State<ChatQueuePage> {
                           ),
                           SizedBox(height: 16),
                           Text(
-                            'No active chats',
+                            widget.showClosed ? 'No chat history' : 'No active chats',
                             style: TextStyle(fontSize: 18, color: Colors.grey),
                           ),
                         ],

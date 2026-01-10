@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:url_launcher/url_launcher.dart';
 
 class CustomerChatPage extends StatefulWidget {
   @override
@@ -63,9 +64,27 @@ class _CustomerChatPageState extends State<CustomerChatPage> {
       print('Error loading chats: $e');
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load chats: $e')),
-        );
+
+        // Check if it's an authentication error
+        if (e.toString().contains('401') ||
+            e.toString().contains('Unauthorized') ||
+            e.toString().contains('not logged in')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Please log in to view chat history'),
+              action: SnackBarAction(
+                label: 'Login',
+                onPressed: () {
+                  Navigator.pushReplacementNamed(context, '/login');
+                },
+              ),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to load chats. Please try again.')),
+          );
+        }
       }
     }
   }
@@ -489,6 +508,25 @@ class _CustomerChatConversationPageState extends State<CustomerChatConversationP
       print('Error loading messages: $e');
       if (mounted && !silent) {
         setState(() => _isLoading = false);
+        // Check if it's an authentication error
+        if (e.toString().contains('401') || e.toString().contains('Unauthorized') || e.toString().contains('not logged in')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Please log in to view this chat'),
+              action: SnackBarAction(
+                label: 'Login',
+                onPressed: () {
+                  // Navigate to login
+                  Navigator.pushReplacementNamed(context, '/login');
+                },
+              ),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to load chat. Please try again.')),
+          );
+        }
       }
     }
   }
@@ -730,38 +768,196 @@ class _CustomerChatConversationPageState extends State<CustomerChatConversationP
                                   if (attachments != null && attachments.isNotEmpty) ...[
                                     ...attachments.map((attachment) {
                                       final attachmentMap = attachment as Map<String, dynamic>;
-                                      return Container(
-                                        margin: EdgeInsets.only(top: 4),
-                                        padding: EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withOpacity(0.2),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              attachmentMap['type'] == 'image'
-                                                  ? Icons.image
-                                                  : attachmentMap['type'] == 'video'
-                                                      ? Icons.video_file
-                                                      : Icons.picture_as_pdf,
-                                              color: textColor,
-                                              size: 16,
-                                            ),
-                                            SizedBox(width: 8),
-                                            Flexible(
-                                              child: Text(
-                                                attachmentMap['name'] ?? 'Attachment',
-                                                style: TextStyle(
-                                                  color: textColor,
-                                                  fontSize: 12,
+                                      final type = attachmentMap['type'] ?? 'file';
+                                      final url = attachmentMap['url'] ?? '';
+                                      final name = attachmentMap['name'] ?? 'Attachment';
+
+                                      // Show image directly
+                                      if (type == 'image' && url.isNotEmpty) {
+                                        return GestureDetector(
+                                          onTap: () {
+                                            // Show image in dialog
+                                            showDialog(
+                                              context: context,
+                                              builder: (context) => Dialog(
+                                                backgroundColor: Colors.transparent,
+                                                child: Stack(
+                                                  children: [
+                                                    Center(
+                                                      child: InteractiveViewer(
+                                                        child: Image.network(
+                                                          url,
+                                                          fit: BoxFit.contain,
+                                                          loadingBuilder: (context, child, loadingProgress) {
+                                                            if (loadingProgress == null) return child;
+                                                            return Center(
+                                                              child: CircularProgressIndicator(
+                                                                value: loadingProgress.expectedTotalBytes != null
+                                                                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                                                    : null,
+                                                              ),
+                                                            );
+                                                          },
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Positioned(
+                                                      top: 10,
+                                                      right: 10,
+                                                      child: IconButton(
+                                                        icon: Icon(Icons.close, color: Colors.white, size: 30),
+                                                        onPressed: () => Navigator.pop(context),
+                                                      ),
+                                                    ),
+                                                    Positioned(
+                                                      bottom: 10,
+                                                      right: 10,
+                                                      child: IconButton(
+                                                        icon: Icon(Icons.open_in_new, color: Colors.white, size: 24),
+                                                        onPressed: () async {
+                                                          try {
+                                                            final uri = Uri.parse(url);
+                                                            if (await canLaunchUrl(uri)) {
+                                                              await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                                            } else {
+                                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                                SnackBar(content: Text('Cannot open this image')),
+                                                              );
+                                                            }
+                                                          } catch (e) {
+                                                            print('Could not open: $e');
+                                                            ScaffoldMessenger.of(context).showSnackBar(
+                                                              SnackBar(content: Text('Failed to open image: $e')),
+                                                            );
+                                                          }
+                                                        },
+                                                        tooltip: 'Open in new tab',
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            );
+                                          },
+                                          child: Container(
+                                            margin: EdgeInsets.only(top: 8),
+                                            constraints: BoxConstraints(
+                                              maxWidth: 200,
+                                              maxHeight: 200,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: Colors.white.withValues(alpha: 0.3),
+                                                width: 2,
                                               ),
                                             ),
-                                          ],
+                                            child: ClipRRect(
+                                              borderRadius: BorderRadius.circular(6),
+                                              child: Image.network(
+                                                url,
+                                                fit: BoxFit.cover,
+                                                loadingBuilder: (context, child, loadingProgress) {
+                                                  if (loadingProgress == null) return child;
+                                                  return Container(
+                                                    height: 150,
+                                                    width: 150,
+                                                    child: Center(
+                                                      child: CircularProgressIndicator(
+                                                        value: loadingProgress.expectedTotalBytes != null
+                                                            ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                                            : null,
+                                                        strokeWidth: 2,
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
+                                                errorBuilder: (context, error, stackTrace) {
+                                                  return Container(
+                                                    height: 150,
+                                                    width: 150,
+                                                    color: Colors.grey[300],
+                                                    child: Column(
+                                                      mainAxisAlignment: MainAxisAlignment.center,
+                                                      children: [
+                                                        Icon(Icons.broken_image, size: 40, color: Colors.grey[600]),
+                                                        SizedBox(height: 8),
+                                                        Text('Image not available', style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+                                                      ],
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }
+
+                                      // Show video/PDF with icon and name
+                                      return InkWell(
+                                        onTap: () async {
+                                          if (url.isNotEmpty) {
+                                            try {
+                                              final uri = Uri.parse(url);
+                                              if (await canLaunchUrl(uri)) {
+                                                await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                              }
+                                            } catch (e) {
+                                              print('Could not launch $url: $e');
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(content: Text('Could not open file')),
+                                                );
+                                              }
+                                            }
+                                          }
+                                        },
+                                        child: Container(
+                                          margin: EdgeInsets.only(top: 4),
+                                          padding: EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withOpacity(0.2),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                type == 'video'
+                                                    ? Icons.videocam
+                                                    : type == 'document'
+                                                        ? Icons.picture_as_pdf
+                                                        : Icons.attach_file,
+                                                color: textColor,
+                                                size: 24,
+                                              ),
+                                              SizedBox(width: 8),
+                                              Flexible(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      name,
+                                                      style: TextStyle(
+                                                        color: textColor,
+                                                        fontSize: 12,
+                                                        fontWeight: FontWeight.w500,
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                    Text(
+                                                      'Tap to open',
+                                                      style: TextStyle(
+                                                        color: textColor.withValues(alpha: 0.7),
+                                                        fontSize: 10,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       );
                                     }).toList(),

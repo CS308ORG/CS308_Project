@@ -171,6 +171,37 @@ class ProductManagerService {
     }
   }
 
+  Future<Map<String, dynamic>> uploadProductImage({
+    required String fileName,
+    required String base64Data,
+    required String mimeType,
+  }) async {
+    final token = await _getToken();
+    if (token == null) throw Exception('Not authenticated');
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/upload/product-image'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: json.encode({
+        'fileName': fileName,
+        'base64Data': base64Data,
+        'mimeType': mimeType,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else if (response.statusCode == 403) {
+      throw Exception('Access denied - Product Manager role required');
+    } else {
+      final error = json.decode(response.body);
+      throw Exception(error['error'] ?? 'Failed to upload image');
+    }
+  }
+
   // =====================================================
   // Stock Management (12.1)
   // =====================================================

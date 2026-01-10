@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chat Test</title>
+</head>
+<body>
+    <h1>Chat API Test</h1>
+    <button onclick="testInitiateChat()">Test Initiate Chat</button>
+    <pre id="result"></pre>
+
+    <script>
+        async function testInitiateChat() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.textContent = 'Testing...';
+
+            try {
+                const response = await fetch('http://localhost:3000/chat/initiate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        customerName: 'Test User',
+                        customerEmail: 'test@example.com'
+                    })
+                });
+
+                const data = await response.json();
+                resultDiv.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                resultDiv.textContent = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>
