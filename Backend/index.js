@@ -4350,98 +4350,162 @@ app.get('/support/chats/:chatId/customer-context', authenticate, authorize(['sup
         const userData = userDoc.data();
 
         console.log('Getting customer context for user:', chatData.userId);
+        console.log('User data:', JSON.stringify(userData, null, 2));
+
+        // Get the numeric user_id from user document for orders query
+        const numericUserId = userData.user_id;
+        console.log('Numeric user_id for orders query:', numericUserId);
 
         // Calculate date 30 days ago for filtering orders
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        // Get customer's orders from last 30 days
+        // Get customer's orders - try with numeric user_id first, then Firebase UID
         let ordersSnapshot;
-        try {
-            ordersSnapshot = await db.collection('orders')
-                .where('user_id', '==', chatData.userId)
-                .where('created_at', '>=', thirtyDaysAgo)
-                .orderBy('created_at', 'desc')
-                .limit(10)
-                .get();
-            console.log(`Found ${ordersSnapshot.docs.length} orders in last 30 days with created_at field`);
-        } catch (e) {
-            // If created_at index doesn't exist or field is missing, try without date filter
-            console.log('Orders query with created_at and date filter failed, trying without date filter:', e.message);
+        let orders = [];
+        
+        // Try with numeric user_id (from user document)
+        if (numericUserId !== undefined) {
+            try {
+                ordersSnapshot = await db.collection('orders')
+                    .where('user_id', '==', numericUserId)
+                    .limit(10)
+                    .get();
+                console.log(`Found ${ordersSnapshot.docs.length} orders with numeric user_id: ${numericUserId}`);
+                
+                if (ordersSnapshot.docs.length === 0) {
+                    // Try as string
+                    ordersSnapshot = await db.collection('orders')
+                        .where('user_id', '==', String(numericUserId))
+                        .limit(10)
+                        .get();
+                    console.log(`Found ${ordersSnapshot.docs.length} orders with string user_id: ${String(numericUserId)}`);
+                }
+            } catch (e) {
+                console.log('Orders query with numeric user_id failed:', e.message);
+            }
+        }
+        
+        // If no orders found, try with Firebase UID
+        if (!ordersSnapshot || ordersSnapshot.docs.length === 0) {
             try {
                 ordersSnapshot = await db.collection('orders')
                     .where('user_id', '==', chatData.userId)
-                    .orderBy('created_at', 'desc')
                     .limit(10)
                     .get();
-                console.log(`Found ${ordersSnapshot.docs.length} orders (no date filter, created_at ordered)`);
-            } catch (e2) {
-                console.log('Orders query with created_at orderBy failed, trying without ordering:', e2.message);
+                console.log(`Found ${ordersSnapshot.docs.length} orders with Firebase UID: ${chatData.userId}`);
+            } catch (e) {
+                console.log('Orders query with Firebase UID failed:', e.message);
+            }
+        }
+        
+        // Also try with 'userId' field (camelCase)
+        if (!ordersSnapshot || ordersSnapshot.docs.length === 0) {
+            try {
                 ordersSnapshot = await db.collection('orders')
-                    .where('user_id', '==', chatData.userId)
+                    .where('userId', '==', chatData.userId)
                     .limit(10)
                     .get();
-                console.log(`Found ${ordersSnapshot.docs.length} orders (no ordering)`);
+                console.log(`Found ${ordersSnapshot.docs.length} orders with userId (camelCase): ${chatData.userId}`);
+            } catch (e) {
+                console.log('Orders query with userId (camelCase) failed:', e.message);
             }
         }
 
-        const orders = ordersSnapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                created_at: data.created_at?.toDate ? data.created_at.toDate() : data.created_at,
-                createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt
-            };
-        });
+        if (ordersSnapshot) {
+            orders = ordersSnapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    ...data,
+                    created_at: data.created_at?.toDate ? data.created_at.toDate() : data.created_at,
+                    createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt
+                };
+            });
+        }
 
         console.log('Processed orders:', orders.length);
 
-        // Get customer's cart from user document
-        const cartProductIds = userData.saved_cart || [];
+        // Get customer's cart from user document - check multiple possible field names
+        const cartData = userData.saved_cart || userData.cart || userData.shopping_cart || [];
+        console.log('Raw cart data from user document:', JSON.stringify(cartData));
         let cartItems = [];
         
-        if (cartProductIds.length > 0) {
+        if (Array.isArray(cartData) && cartData.length > 0) {
             // Fetch product details for cart items
-            for (const cartItem of cartProductIds) {
+            for (const cartItem of cartData) {
                 try {
-                    const productId = cartItem.product_id || cartItem.id;
+                    const productId = cartItem.product_id || cartItem.productId || cartItem.id;
+                    console.log('Fetching cart product:', productId);
                     const productDoc = await db.collection('products').doc(String(productId)).get();
                     if (productDoc.exists) {
+                        const productData = productDoc.data();
                         cartItems.push({
                             id: productDoc.id,
                             quantity: cartItem.quantity || 1,
-                            ...productDoc.data()
+                            name: productData.name || cartItem.name || 'Unknown Product',
+                            price: productData.price || cartItem.price || 0,
+                            ...productData
+                        });
+                    } else {
+                        // Product not found in products collection, use cart item data directly
+                        console.log('Product not found in collection, using cart item data:', cartItem);
+                        cartItems.push({
+                            id: productId,
+                            quantity: cartItem.quantity || 1,
+                            name: cartItem.name || 'Unknown Product',
+                            price: cartItem.price || 0
                         });
                     }
                 } catch (e) {
                     console.warn('Failed to fetch cart product:', cartItem, e.message);
+                    // Still add the item with available data
+                    cartItems.push({
+                        id: cartItem.product_id || cartItem.id || 'unknown',
+                        quantity: cartItem.quantity || 1,
+                        name: cartItem.name || 'Unknown Product',
+                        price: cartItem.price || 0
+                    });
                 }
             }
         }
-        console.log('Cart items:', cartItems.length);
+        console.log('Cart items:', cartItems.length, JSON.stringify(cartItems));
 
-        // Get customer's wishlist from user document
-        const wishlistProductIds = userData.wishlist || [];
+        // Get customer's wishlist from user document - check multiple possible field names
+        const wishlistData = userData.wishlist || userData.favorites || userData.wish_list || [];
+        console.log('Raw wishlist data from user document:', JSON.stringify(wishlistData));
         let wishlistItems = [];
         
-        if (wishlistProductIds.length > 0) {
+        if (Array.isArray(wishlistData) && wishlistData.length > 0) {
             // Fetch product details for wishlist items
-            for (const productId of wishlistProductIds) {
+            for (const item of wishlistData) {
                 try {
+                    // Handle both simple ID arrays and object arrays
+                    const productId = typeof item === 'object' ? (item.product_id || item.productId || item.id) : item;
+                    console.log('Fetching wishlist product:', productId);
                     const productDoc = await db.collection('products').doc(String(productId)).get();
                     if (productDoc.exists) {
+                        const productData = productDoc.data();
                         wishlistItems.push({
                             id: productDoc.id,
-                            ...productDoc.data()
+                            name: productData.name || 'Unknown Product',
+                            price: productData.price || 0,
+                            ...productData
+                        });
+                    } else if (typeof item === 'object') {
+                        // Product not found, use item data directly
+                        wishlistItems.push({
+                            id: productId,
+                            name: item.name || 'Unknown Product',
+                            price: item.price || 0
                         });
                     }
                 } catch (e) {
-                    console.warn('Failed to fetch wishlist product:', productId, e.message);
+                    console.warn('Failed to fetch wishlist product:', item, e.message);
                 }
             }
         }
-        console.log('Wishlist items:', wishlistItems.length);
+        console.log('Wishlist items:', wishlistItems.length, JSON.stringify(wishlistItems));
 
         const responseData = {
             isGuest: false,
