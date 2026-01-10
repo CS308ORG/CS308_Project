@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:convert' show base64Encode;
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import '../services/product_manager_service.dart';
 
 class StockManagementPage extends StatefulWidget {
@@ -17,6 +21,33 @@ class _StockManagementPageState extends State<StockManagementPage> {
   String _searchQuery = '';
   String _selectedCategory = 'All';
   String _stockFilter = 'all'; // all, low, out
+
+  // Controllers for add/edit product dialog
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController descController = TextEditingController();
+  final TextEditingController priceController = TextEditingController();
+  final TextEditingController stockController = TextEditingController();
+  final TextEditingController modelController = TextEditingController();
+  final TextEditingController serialController = TextEditingController();
+  final TextEditingController warrantyController = TextEditingController();
+  final TextEditingController distributorController = TextEditingController();
+
+  String? selectedCategory;
+  PlatformFile? selectedImage;
+  String? uploadedImageUrl;
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    descController.dispose();
+    priceController.dispose();
+    stockController.dispose();
+    modelController.dispose();
+    serialController.dispose();
+    warrantyController.dispose();
+    distributorController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -245,23 +276,111 @@ class _StockManagementPageState extends State<StockManagementPage> {
     final serialController = TextEditingController();
     final warrantyController = TextEditingController();
     final distributorController = TextEditingController();
-    String selectedCategory = _categories.length > 1 ? _categories[1] : 'Uncategorized';
+
+    // Get available categories (excluding 'All')
+    List<String> availableCategories = _categories.where((c) => c != 'All').toList();
+    String selectedCategory = availableCategories.isNotEmpty ? availableCategories.first : 'Uncategorized';
+
+    PlatformFile? selectedImage;
+    String? uploadedImageUrl;
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.add_box, color: Color(0xFFFF7733)),
-            SizedBox(width: 8),
-            Text('Add New Product'),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Row(
             children: [
-              TextField(
+              Icon(Icons.add_box, color: Color(0xFFFF7733)),
+              SizedBox(width: 8),
+              Text('Add New Product'),
+            ],
+          ),
+          content: Container(
+            width: MediaQuery.of(context).size.width * 0.5,
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Image upload section
+                  Container(
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Color(0xFFFFF5E6),
+                      border: Border.all(color: Color(0xFFFF7733), width: 2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          'Product Image',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFFF7733),
+                          ),
+                        ),
+                        SizedBox(height: 12),
+                        if (selectedImage != null) ...[
+                          if (kIsWeb && selectedImage!.bytes != null)
+                            Image.memory(
+                              selectedImage!.bytes!,
+                              height: 150,
+                              fit: BoxFit.cover,
+                            )
+                          else
+                            Text('Image selected: ${selectedImage!.name}'),
+                          SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              TextButton.icon(
+                                icon: Icon(Icons.delete, color: Colors.red),
+                                label: Text('Remove', style: TextStyle(color: Colors.red)),
+                                onPressed: () {
+                                  setDialogState(() {
+                                    selectedImage = null;
+                                    uploadedImageUrl = null;
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        ] else ...[
+                          Icon(Icons.image, size: 50, color: Colors.grey),
+                          SizedBox(height: 8),
+                          ElevatedButton.icon(
+                            icon: Icon(Icons.upload_file),
+                            label: Text('Select Product Image'),
+                            onPressed: () async {
+                              try {
+                                FilePickerResult? result = await FilePicker.platform.pickFiles(
+                                  type: FileType.image,
+                                  allowMultiple: false,
+                                );
+
+                                if (result != null && result.files.isNotEmpty) {
+                                  setDialogState(() {
+                                    selectedImage = result.files.first;
+                                  });
+                                }
+                              } catch (e) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Failed to pick image: $e')),
+                                );
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Color(0xFFFF7733),
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  TextField(
                 controller: nameController,
                 decoration: InputDecoration(labelText: 'Product Name *', border: OutlineInputBorder()),
               ),
@@ -295,10 +414,16 @@ class _StockManagementPageState extends State<StockManagementPage> {
               DropdownButtonFormField<String>(
                 value: selectedCategory,
                 decoration: InputDecoration(labelText: 'Category', border: OutlineInputBorder()),
-                items: _categories.where((c) => c != 'All').map((c) => 
+                items: _categories.where((c) => c != 'All').map((c) =>
                   DropdownMenuItem(value: c, child: Text(c))
                 ).toList(),
-                onChanged: (v) => selectedCategory = v ?? selectedCategory,
+                onChanged: (v) {
+                  if (v != null) {
+                    setDialogState(() {
+                      selectedCategory = v;
+                    });
+                  }
+                },
               ),
               SizedBox(height: 12),
               TextField(
@@ -323,46 +448,405 @@ class _StockManagementPageState extends State<StockManagementPage> {
             ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel'),
+      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Color(0xFFFF7733)),
+              onPressed: () async {
+                if (nameController.text.isEmpty || priceController.text.isEmpty || stockController.text.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Please fill required fields')),
+                  );
+                  return;
+                }
+
+                try {
+                  // Upload image first if selected
+                  if (selectedImage != null) {
+                    try {
+                      String base64Data;
+                      if (kIsWeb) {
+                        base64Data = base64Encode(selectedImage!.bytes!);
+                      } else {
+                        final bytes = await selectedImage!.xFile.readAsBytes();
+                        base64Data = base64Encode(bytes);
+                      }
+
+                      final extension = selectedImage!.extension ?? 'jpg';
+                      String mimeType = 'image/jpeg';
+                      if (extension == 'png') mimeType = 'image/png';
+                      else if (extension == 'gif') mimeType = 'image/gif';
+                      else if (extension == 'webp') mimeType = 'image/webp';
+
+                      print('Uploading image: ${selectedImage!.name}, type: $mimeType');
+
+                      final uploadResult = await _pmService.uploadProductImage(
+                        fileName: selectedImage!.name,
+                        base64Data: base64Data,
+                        mimeType: mimeType,
+                      );
+
+                      print('Upload result: $uploadResult');
+                      uploadedImageUrl = uploadResult['url'];
+                    } catch (uploadError) {
+                      print('Image upload error: $uploadError');
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Failed to upload image: ${uploadError.toString()}'),
+                            backgroundColor: Colors.orange,
+                          ),
+                        );
+                      }
+                      // Continue without image if upload fails
+                      uploadedImageUrl = null;
+                    }
+                  }
+
+                  // Add product with image URL
+                  print('Adding product: name=${nameController.text}, price=${priceController.text}');
+
+                  await _pmService.addProduct({
+                    'name': nameController.text,
+                    'description': descController.text,
+                    'price': double.parse(priceController.text),
+                    'quantity_in_stock': int.parse(stockController.text),
+                    'category': selectedCategory,
+                    'model': modelController.text,
+                    'serial_number': serialController.text,
+                    'warranty_status': warrantyController.text,
+                    'distributor_info': distributorController.text,
+                    if (uploadedImageUrl != null && uploadedImageUrl!.isNotEmpty) 'image_url': uploadedImageUrl,
+                  });
+                  Navigator.pop(ctx);
+                  _loadData();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Product added successfully'), backgroundColor: Colors.green),
+                  );
+                } catch (e) {
+                  print('Add product error: $e');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                  );
+                }
+              },
+              child: Text('Add Product', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditProductDialog(Map<String, dynamic> product) {
+    // Removed - image upload feature removed from product manager
+    return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.edit_note, color: Color(0xFFFF7733)),
+              SizedBox(width: 8),
+              Expanded(child: Text('Edit Product', overflow: TextOverflow.ellipsis)),
+            ],
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Color(0xFFFF7733)),
-            onPressed: () async {
-              if (nameController.text.isEmpty || priceController.text.isEmpty || stockController.text.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Please fill required fields')),
-                );
-                return;
-              }
-              try {
-                await _pmService.addProduct({
-                  'name': nameController.text,
-                  'description': descController.text,
-                  'price': double.parse(priceController.text),
-                  'quantity_in_stock': int.parse(stockController.text),
-                  'category': selectedCategory,
-                  'model': modelController.text,
-                  'serial_number': serialController.text,
-                  'warranty_status': warrantyController.text,
-                  'distributor_info': distributorController.text,
-                });
-                Navigator.pop(ctx);
-                _loadData();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Product added successfully'), backgroundColor: Colors.green),
-                );
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-                );
-              }
-            },
-            child: Text('Add Product', style: TextStyle(color: Colors.white)),
+          content: Container(
+            width: MediaQuery.of(context).size.width * 0.5,
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Image upload section
+                  Container(
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Color(0xFFFFF5E6),
+                      border: Border.all(color: Color(0xFFFF7733), width: 2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          'Product Image',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFFF7733),
+                          ),
+                        ),
+                        SizedBox(height: 12),
+                        if (selectedImage != null) ...[
+                          if (kIsWeb && selectedImage!.bytes != null)
+                            Image.memory(
+                              selectedImage!.bytes!,
+                              height: 150,
+                              fit: BoxFit.cover,
+                            )
+                          else
+                            Text('Image selected: ${selectedImage!.name}'),
+                          SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              TextButton.icon(
+                                icon: Icon(Icons.delete, color: Colors.red),
+                                label: Text('Remove', style: TextStyle(color: Colors.red)),
+                                onPressed: () {
+                                  setDialogState(() {
+                                    selectedImage = null;
+                                    uploadedImageUrl = null;
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        ] else if (uploadedImageUrl != null && uploadedImageUrl!.isNotEmpty) ...[
+                          Image.network(
+                            uploadedImageUrl!,
+                            height: 150,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image, size: 50, color: Colors.grey),
+                          ),
+                          SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              TextButton.icon(
+                                icon: Icon(Icons.delete, color: Colors.red),
+                                label: Text('Remove Current', style: TextStyle(color: Colors.red)),
+                                onPressed: () {
+                                  setDialogState(() {
+                                    uploadedImageUrl = null;
+                                  });
+                                },
+                              ),
+                              SizedBox(width: 8),
+                              TextButton.icon(
+                                icon: Icon(Icons.upload_file, color: Color(0xFFFF7733)),
+                                label: Text('Change Image'),
+                                onPressed: () async {
+                                  try {
+                                    FilePickerResult? result = await FilePicker.platform.pickFiles(
+                                      type: FileType.image,
+                                      allowMultiple: false,
+                                    );
+
+                                    if (result != null && result.files.isNotEmpty) {
+                                      setDialogState(() {
+                                        selectedImage = result.files.first;
+                                        uploadedImageUrl = null;
+                                      });
+                                    }
+                                  } catch (e) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Failed to pick image: $e')),
+                                    );
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        ] else ...[
+                          Icon(Icons.image, size: 50, color: Colors.grey),
+                          SizedBox(height: 8),
+                          ElevatedButton.icon(
+                            icon: Icon(Icons.upload_file),
+                            label: Text('Select Product Image'),
+                            onPressed: () async {
+                              try {
+                                FilePickerResult? result = await FilePicker.platform.pickFiles(
+                                  type: FileType.image,
+                                  allowMultiple: false,
+                                );
+
+                                if (result != null && result.files.isNotEmpty) {
+                                  setDialogState(() {
+                                    selectedImage = result.files.first;
+                                  });
+                                }
+                              } catch (e) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Failed to pick image: $e')),
+                                );
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Color(0xFFFF7733),
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(labelText: 'Product Name *', border: OutlineInputBorder()),
+                  ),
+                  SizedBox(height: 12),
+                  TextField(
+                    controller: descController,
+                    decoration: InputDecoration(labelText: 'Description', border: OutlineInputBorder()),
+                    maxLines: 2,
+                  ),
+                  SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: priceController,
+                          decoration: InputDecoration(labelText: 'Price *', border: OutlineInputBorder()),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: stockController,
+                          decoration: InputDecoration(labelText: 'Stock *', border: OutlineInputBorder()),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedCategory,
+                    decoration: InputDecoration(labelText: 'Category', border: OutlineInputBorder()),
+                    items: _categories.where((c) => c != 'All').map((c) =>
+                      DropdownMenuItem(value: c, child: Text(c))
+                    ).toList(),
+                    onChanged: (v) {
+                      if (v != null) {
+                        setDialogState(() {
+                          selectedCategory = v;
+                        });
+                      }
+                    },
+                  ),
+                  SizedBox(height: 12),
+                  TextField(
+                    controller: modelController,
+                    decoration: InputDecoration(labelText: 'Model', border: OutlineInputBorder()),
+                  ),
+                  SizedBox(height: 12),
+                  TextField(
+                    controller: serialController,
+                    decoration: InputDecoration(labelText: 'Serial Number', border: OutlineInputBorder()),
+                  ),
+                  SizedBox(height: 12),
+                  TextField(
+                    controller: warrantyController,
+                    decoration: InputDecoration(labelText: 'Warranty Status', border: OutlineInputBorder()),
+                  ),
+                  SizedBox(height: 12),
+                  TextField(
+                    controller: distributorController,
+                    decoration: InputDecoration(labelText: 'Distributor Info', border: OutlineInputBorder()),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Color(0xFFFF7733)),
+              onPressed: () async {
+                if (nameController.text.isEmpty || priceController.text.isEmpty || stockController.text.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Please fill required fields')),
+                  );
+                  return;
+                }
+
+                try {
+                  // Upload new image if selected
+                  if (selectedImage != null) {
+                    try {
+                      String base64Data;
+                      if (kIsWeb) {
+                        base64Data = base64Encode(selectedImage!.bytes!);
+                      } else {
+                        final bytes = await selectedImage!.xFile.readAsBytes();
+                        base64Data = base64Encode(bytes);
+                      }
+
+                      final extension = selectedImage!.extension ?? 'jpg';
+                      String mimeType = 'image/jpeg';
+                      if (extension == 'png') mimeType = 'image/png';
+                      else if (extension == 'gif') mimeType = 'image/gif';
+                      else if (extension == 'webp') mimeType = 'image/webp';
+
+                      print('Uploading image: ${selectedImage!.name}, type: $mimeType');
+
+                      final uploadResult = await _pmService.uploadProductImage(
+                        fileName: selectedImage!.name,
+                        base64Data: base64Data,
+                        mimeType: mimeType,
+                      );
+
+                      print('Upload result: $uploadResult');
+                      uploadedImageUrl = uploadResult['url'];
+                    } catch (uploadError) {
+                      print('Image upload error: $uploadError');
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Failed to upload image: ${uploadError.toString()}'),
+                            backgroundColor: Colors.orange,
+                          ),
+                        );
+                      }
+                      // Continue without image if upload fails
+                      uploadedImageUrl = product['image_url']; // Keep old image
+                    }
+                  }
+
+                  // Update product with new data
+                  print('Updating product with data: name=${nameController.text}, price=${priceController.text}');
+
+                  await _pmService.updateProduct(product['id'], {
+                    'name': nameController.text,
+                    'description': descController.text,
+                    'price': double.parse(priceController.text),
+                    'quantity_in_stock': int.parse(stockController.text),
+                    'category': selectedCategory,
+                    'model': modelController.text,
+                    'serial_number': serialController.text,
+                    'warranty_status': warrantyController.text,
+                    'distributor_info': distributorController.text,
+                    if (uploadedImageUrl != null && uploadedImageUrl!.isNotEmpty) 'image_url': uploadedImageUrl,
+                  });
+
+                  Navigator.pop(ctx);
+                  _loadData();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Product updated successfully'), backgroundColor: Colors.green),
+                  );
+                } catch (e) {
+                  print('Update product error: $e');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                  );
+                }
+              },
+              child: Text('Update', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -660,37 +1144,10 @@ class _StockManagementPageState extends State<StockManagementPage> {
                     ],
                   ),
                 ),
-                PopupMenuButton(
-                  icon: Icon(Icons.more_vert),
-                  itemBuilder: (ctx) => [
-                    PopupMenuItem(
-                      value: 'edit_stock',
-                      child: Row(
-                        children: [
-                          Icon(Icons.edit, size: 18),
-                          SizedBox(width: 8),
-                          Text('Update Stock'),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete, size: 18, color: Colors.red),
-                          SizedBox(width: 8),
-                          Text('Delete', style: TextStyle(color: Colors.red)),
-                        ],
-                      ),
-                    ),
-                  ],
-                  onSelected: (value) {
-                    if (value == 'edit_stock') {
-                      _showUpdateStockDialog(product);
-                    } else if (value == 'delete') {
-                      _showDeleteConfirmDialog(product);
-                    }
-                  },
+                IconButton(
+                  icon: Icon(Icons.delete, color: Colors.red),
+                  onPressed: () => _showDeleteConfirmDialog(product),
+                  tooltip: 'Delete Product',
                 ),
               ],
             ),

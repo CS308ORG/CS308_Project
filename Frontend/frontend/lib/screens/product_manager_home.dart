@@ -184,7 +184,7 @@ class _ProductManagementTabState extends State<_ProductManagementTab> {
               DropdownButtonFormField<String>(
                 value: selectedCategory,
                 decoration: const InputDecoration(labelText: 'Category'),
-                items: _categories.where((c) => c != 'All').map((c) => 
+                items: _categories.where((c) => c != 'All').map((c) =>
                   DropdownMenuItem(value: c, child: Text(c))
                 ).toList(),
                 onChanged: (v) => selectedCategory = v ?? selectedCategory,

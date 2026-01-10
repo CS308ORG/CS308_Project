@@ -143,8 +143,8 @@ class _SupportAgentHomeState extends State<SupportAgentHome> {
                 children: [
                   _buildActionCard(
                     icon: Icons.chat_bubble_outline,
-                    title: 'Chat Queue',
-                    subtitle: 'View active chats',
+                    title: 'Active Chats',
+                    subtitle: 'View and respond to chats',
                     color: Colors.blue,
                     onTap: () {
                       Navigator.push(
@@ -156,38 +156,16 @@ class _SupportAgentHomeState extends State<SupportAgentHome> {
                     },
                   ),
                   _buildActionCard(
-                    icon: Icons.pending_actions,
-                    title: 'My Chats',
-                    subtitle: 'Claimed conversations',
-                    color: Colors.orange,
-                    onTap: () {
-                      // Navigate to my chats
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Coming soon!')),
-                      );
-                    },
-                  ),
-                  _buildActionCard(
                     icon: Icons.history,
                     title: 'Chat History',
                     subtitle: 'Closed conversations',
                     color: Colors.green,
                     onTap: () {
-                      // Navigate to chat history
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Coming soon!')),
-                      );
-                    },
-                  ),
-                  _buildActionCard(
-                    icon: Icons.analytics,
-                    title: 'Statistics',
-                    subtitle: 'Performance metrics',
-                    color: Colors.purple,
-                    onTap: () {
-                      // Navigate to statistics
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Coming soon!')),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ChatQueuePage(showClosed: true),
+                        ),
                       );
                     },
                   ),
