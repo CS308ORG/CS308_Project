@@ -315,7 +315,6 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildInfoRow('Name', _customerContext!['customerName'] ?? 'N/A'),
-                      _buildInfoRow('Email', _customerContext!['customerEmail'] ?? 'N/A'),
                       SizedBox(height: 8),
                       Container(
                         padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -352,19 +351,6 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
                         ],
                       ),
                       SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Icon(Icons.email, size: 16, color: Colors.grey),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _customerContext!['profile']?['email'] ?? 'N/A',
-                              style: TextStyle(fontSize: 14),
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 4),
                       Row(
                         children: [
                           Icon(Icons.badge, size: 16, color: Colors.grey),
@@ -504,50 +490,224 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               SizedBox(height: 8),
-              Card(
-                child: Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      Icon(Icons.shopping_cart, color: Theme.of(context).primaryColor),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          (_customerContext!['cart']?.isEmpty ?? true)
-                              ? 'Cart is empty'
-                              : '${_customerContext!['cart'].length} item(s) in cart',
-                          style: TextStyle(fontSize: 14),
+              if ((_customerContext!['cart']?.isEmpty ?? true))
+                Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Icon(Icons.shopping_cart, color: Theme.of(context).primaryColor),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Cart is empty',
+                            style: TextStyle(fontSize: 14, color: Colors.grey),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.shopping_cart, color: Theme.of(context).primaryColor, size: 20),
+                            SizedBox(width: 8),
+                            Text(
+                              '${_customerContext!['cart'].length} item(s) in cart',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 12),
+                        ...((_customerContext!['cart'] as List?)?.map((item) {
+                              final name = item['name'] ?? 'Unknown Product';
+                              final price = item['price'] ?? 'N/A';
+                              final quantity = item['quantity'] ?? 1;
+                              final productId = item['id'] ?? 'N/A';
+                              final subtotal = (price is num) ? (price * quantity).toStringAsFixed(2) : 'N/A';
+                              return Container(
+                                margin: EdgeInsets.only(bottom: 8),
+                                padding: EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[50],
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.shopping_bag_outlined, size: 18, color: Colors.grey),
+                                    SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            name,
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          Row(
+                                            children: [
+                                              Text(
+                                                'ID: $productId',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.grey[600],
+                                                ),
+                                              ),
+                                              SizedBox(width: 12),
+                                              Text(
+                                                'Qty: $quantity',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.grey[600],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Text(
+                                          '\$${price is String ? price : price.toStringAsFixed(2)}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        Text(
+                                          'Subtotal: \$$subtotal',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Color(0xFFFF7733),
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList() ?? [])
+                      ],
+                    ),
                   ),
                 ),
-              ),
               SizedBox(height: 16),
               Text(
                 'Wishlist',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               SizedBox(height: 8),
-              Card(
-                child: Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      Icon(Icons.favorite, color: Colors.red),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          (_customerContext!['wishlist']?.isEmpty ?? true)
-                              ? 'Wishlist is empty'
-                              : '${_customerContext!['wishlist'].length} item(s) in wishlist',
-                          style: TextStyle(fontSize: 14),
+              if ((_customerContext!['wishlist']?.isEmpty ?? true))
+                Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Icon(Icons.favorite, color: Colors.red),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Wishlist is empty',
+                            style: TextStyle(fontSize: 14, color: Colors.grey),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.favorite, color: Colors.red, size: 20),
+                            SizedBox(width: 8),
+                            Text(
+                              '${_customerContext!['wishlist'].length} item(s) in wishlist',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 12),
+                        ...((_customerContext!['wishlist'] as List?)?.map((item) {
+                              final name = item['name'] ?? 'Unknown Product';
+                              final price = item['price'] ?? 'N/A';
+                              final productId = item['id'] ?? 'N/A';
+                              return Container(
+                                margin: EdgeInsets.only(bottom: 8),
+                                padding: EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[50],
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.shopping_bag_outlined, size: 18, color: Colors.grey),
+                                    SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            name,
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          Text(
+                                            'ID: $productId',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Text(
+                                      '\$${price is String ? price : price.toStringAsFixed(2)}',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFFFF7733),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList() ?? [])
+                      ],
+                    ),
                   ),
                 ),
-              ),
             ],
           ],
         ),

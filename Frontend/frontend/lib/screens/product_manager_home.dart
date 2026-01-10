@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:convert';
 import '../services/api_service.dart';
 import '../services/product_manager_service.dart';
 import 'login_screen.dart';
@@ -153,61 +156,100 @@ class _ProductManagementTabState extends State<_ProductManagementTab> {
     final warrantyController = TextEditingController();
     final distributorController = TextEditingController();
     String selectedCategory = _categories.length > 1 ? _categories[1] : 'Uncategorized';
+    String? selectedImageUrl;
+    XFile? selectedImage;
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Add New Product'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Product Name *'),
-              ),
-              TextField(
-                controller: descController,
-                decoration: const InputDecoration(labelText: 'Description'),
-                maxLines: 2,
-              ),
-              TextField(
-                controller: priceController,
-                decoration: const InputDecoration(labelText: 'Price *'),
-                keyboardType: TextInputType.number,
-              ),
-              TextField(
-                controller: stockController,
-                decoration: const InputDecoration(labelText: 'Stock Quantity *'),
-                keyboardType: TextInputType.number,
-              ),
-              DropdownButtonFormField<String>(
-                value: selectedCategory,
-                decoration: const InputDecoration(labelText: 'Category'),
-                items: _categories.where((c) => c != 'All').map((c) =>
-                  DropdownMenuItem(value: c, child: Text(c))
-                ).toList(),
-                onChanged: (v) => selectedCategory = v ?? selectedCategory,
-              ),
-              TextField(
-                controller: modelController,
-                decoration: const InputDecoration(labelText: 'Model'),
-              ),
-              TextField(
-                controller: serialController,
-                decoration: const InputDecoration(labelText: 'Serial Number'),
-              ),
-              TextField(
-                controller: warrantyController,
-                decoration: const InputDecoration(labelText: 'Warranty Status'),
-              ),
-              TextField(
-                controller: distributorController,
-                decoration: const InputDecoration(labelText: 'Distributor Info'),
-              ),
-            ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Add New Product'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: 'Product Name *'),
+                ),
+                TextField(
+                  controller: descController,
+                  decoration: const InputDecoration(labelText: 'Description'),
+                  maxLines: 2,
+                ),
+                TextField(
+                  controller: priceController,
+                  decoration: const InputDecoration(labelText: 'Price *'),
+                  keyboardType: TextInputType.number,
+                ),
+                TextField(
+                  controller: stockController,
+                  decoration: const InputDecoration(labelText: 'Stock Quantity *'),
+                  keyboardType: TextInputType.number,
+                ),
+                DropdownButtonFormField<String>(
+                  value: selectedCategory,
+                  decoration: const InputDecoration(labelText: 'Category'),
+                  items: _categories.where((c) => c != 'All').map((c) =>
+                    DropdownMenuItem(value: c, child: Text(c))
+                  ).toList(),
+                  onChanged: (v) => selectedCategory = v ?? selectedCategory,
+                ),
+                TextField(
+                  controller: modelController,
+                  decoration: const InputDecoration(labelText: 'Model'),
+                ),
+                TextField(
+                  controller: serialController,
+                  decoration: const InputDecoration(labelText: 'Serial Number'),
+                ),
+                TextField(
+                  controller: warrantyController,
+                  decoration: const InputDecoration(labelText: 'Warranty Status'),
+                ),
+                TextField(
+                  controller: distributorController,
+                  decoration: const InputDecoration(labelText: 'Distributor Info'),
+                ),
+                const SizedBox(height: 16),
+                // Image picker section
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    children: [
+                      if (selectedImage != null) ...[
+                        const Text('Image selected:', style: TextStyle(fontSize: 12, color: Colors.green)),
+                        Text(selectedImage!.name, style: const TextStyle(fontSize: 10)),
+                        const SizedBox(height: 8),
+                      ],
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          final ImagePicker picker = ImagePicker();
+                          final XFile? image = await picker.pickImage(
+                            source: ImageSource.gallery,
+                            maxWidth: 1920,
+                            maxHeight: 1080,
+                            imageQuality: 85,
+                          );
+                          if (image != null) {
+                            setDialogState(() {
+                              selectedImage = image;
+                            });
+                          }
+                        },
+                        icon: const Icon(Icons.image),
+                        label: Text(selectedImage == null ? 'Choose Image' : 'Change Image'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -222,8 +264,40 @@ class _ProductManagementTabState extends State<_ProductManagementTab> {
                 );
                 return;
               }
+
               try {
-                await widget.pmService.addProduct({
+                // Upload image first if selected
+                String imageUrl = '';
+                if (selectedImage != null) {
+                  try {
+                    print('📤 Uploading image: ${selectedImage!.name}');
+                    final bytes = await selectedImage!.readAsBytes();
+                    final base64Image = base64Encode(bytes);
+                    print('📊 Image size: ${bytes.length} bytes, Base64 length: ${base64Image.length}');
+
+                    final result = await widget.pmService.uploadProductImage(
+                      fileName: selectedImage!.name,
+                      base64Data: base64Image,
+                      mimeType: selectedImage!.mimeType ?? 'image/jpeg',
+                    );
+                    imageUrl = result['url'] ?? '';
+                    print('✅ Image uploaded: $imageUrl');
+                  } catch (e) {
+                    print('❌ Image upload error: $e');
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Image upload failed: $e'),
+                        backgroundColor: Colors.red,
+                        duration: const Duration(seconds: 5),
+                      ),
+                    );
+                    // Don't return here, continue with product creation without image
+                  }
+                }
+
+                // Create product with image URL
+                print('📦 Creating product with data...');
+                final productData = {
                   'name': nameController.text,
                   'description': descController.text,
                   'price': double.parse(priceController.text),
@@ -233,21 +307,236 @@ class _ProductManagementTabState extends State<_ProductManagementTab> {
                   'serial_number': serialController.text,
                   'warranty_status': warrantyController.text,
                   'distributor_info': distributorController.text,
-                });
+                  'image_url': imageUrl,
+                };
+                print('Product data: $productData');
+
+                await widget.pmService.addProduct(productData);
+                print('✅ Product added successfully');
+
                 Navigator.pop(ctx);
                 _loadData();
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Product added successfully')),
+                  const SnackBar(
+                    content: Text('Product added successfully'),
+                    backgroundColor: Colors.green,
+                  ),
                 );
               } catch (e) {
+                print('❌ Product creation error: $e');
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Error: $e')),
+                  SnackBar(
+                    content: Text('Error: $e'),
+                    backgroundColor: Colors.red,
+                    duration: const Duration(seconds: 5),
+                  ),
                 );
               }
             },
             child: const Text('Add', style: TextStyle(color: Colors.white)),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showEditProductDialog(Map<String, dynamic> product) {
+    final nameController = TextEditingController(text: product['name']);
+    final descController = TextEditingController(text: product['description'] ?? '');
+    final priceController = TextEditingController(text: product['price']?.toString() ?? '');
+    final modelController = TextEditingController(text: product['model'] ?? '');
+    final serialController = TextEditingController(text: product['serial_number'] ?? '');
+    final warrantyController = TextEditingController(text: product['warranty_status'] ?? '');
+    final distributorController = TextEditingController(text: product['distributor_info'] ?? '');
+    String selectedCategory = product['category'] ?? 'Uncategorized';
+    String currentImageUrl = product['image_url'] ?? '';
+    XFile? selectedImage;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Edit: ${product['name']}'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: 'Product Name *'),
+                ),
+                TextField(
+                  controller: descController,
+                  decoration: const InputDecoration(labelText: 'Description'),
+                  maxLines: 2,
+                ),
+                TextField(
+                  controller: priceController,
+                  decoration: const InputDecoration(labelText: 'Price *'),
+                  keyboardType: TextInputType.number,
+                ),
+                DropdownButtonFormField<String>(
+                  value: selectedCategory,
+                  decoration: const InputDecoration(labelText: 'Category'),
+                  items: _categories.where((c) => c != 'All').map((c) =>
+                    DropdownMenuItem(value: c, child: Text(c))
+                  ).toList(),
+                  onChanged: (v) {
+                    selectedCategory = v ?? selectedCategory;
+                    setDialogState(() {});
+                  },
+                ),
+                TextField(
+                  controller: modelController,
+                  decoration: const InputDecoration(labelText: 'Model'),
+                ),
+                TextField(
+                  controller: serialController,
+                  decoration: const InputDecoration(labelText: 'Serial Number'),
+                ),
+                TextField(
+                  controller: warrantyController,
+                  decoration: const InputDecoration(labelText: 'Warranty Status'),
+                ),
+                TextField(
+                  controller: distributorController,
+                  decoration: const InputDecoration(labelText: 'Distributor Info'),
+                ),
+                const SizedBox(height: 16),
+                // Image section
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    children: [
+                      if (currentImageUrl.isNotEmpty && selectedImage == null) ...[
+                        const Text('Current Image:', style: TextStyle(fontSize: 12)),
+                        const SizedBox(height: 8),
+                        Image.network(
+                          currentImageUrl,
+                          height: 100,
+                          errorBuilder: (context, error, stackTrace) =>
+                            const Icon(Icons.broken_image, size: 50),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                      if (selectedImage != null) ...[
+                        const Text('New image selected:', style: TextStyle(fontSize: 12, color: Colors.green)),
+                        Text(selectedImage!.name, style: const TextStyle(fontSize: 10)),
+                        const SizedBox(height: 8),
+                      ],
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          final ImagePicker picker = ImagePicker();
+                          final XFile? image = await picker.pickImage(
+                            source: ImageSource.gallery,
+                            maxWidth: 1920,
+                            maxHeight: 1080,
+                            imageQuality: 85,
+                          );
+                          if (image != null) {
+                            setDialogState(() {
+                              selectedImage = image;
+                            });
+                          }
+                        },
+                        icon: const Icon(Icons.image),
+                        label: Text(selectedImage == null && currentImageUrl.isEmpty
+                          ? 'Add Image'
+                          : 'Change Image'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF7733)),
+              onPressed: () async {
+                if (nameController.text.isEmpty || priceController.text.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please fill required fields')),
+                  );
+                  return;
+                }
+
+                try {
+                  // Upload new image if selected
+                  String imageUrl = currentImageUrl;
+                  if (selectedImage != null) {
+                    try {
+                      print('📤 Uploading new image: ${selectedImage!.name}');
+                      final bytes = await selectedImage!.readAsBytes();
+                      final base64Image = base64Encode(bytes);
+                      print('📊 Image size: ${bytes.length} bytes');
+
+                      final result = await widget.pmService.uploadProductImage(
+                        fileName: selectedImage!.name,
+                        base64Data: base64Image,
+                        mimeType: selectedImage!.mimeType ?? 'image/jpeg',
+                      );
+                      imageUrl = result['url'] ?? currentImageUrl;
+                      print('✅ Image uploaded: $imageUrl');
+                    } catch (e) {
+                      print('❌ Image upload error: $e');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Image upload failed: $e'),
+                          backgroundColor: Colors.red,
+                          duration: const Duration(seconds: 5),
+                        ),
+                      );
+                      // Continue with update using old image URL
+                    }
+                  }
+
+                  // Update product
+                  print('📝 Updating product: ${product['id']}');
+                  await widget.pmService.updateProduct(product['id'], {
+                    'name': nameController.text,
+                    'description': descController.text,
+                    'price': double.parse(priceController.text),
+                    'category': selectedCategory,
+                    'model': modelController.text,
+                    'serial_number': serialController.text,
+                    'warranty_status': warrantyController.text,
+                    'distributor_info': distributorController.text,
+                    'image_url': imageUrl,
+                  });
+                  print('✅ Product updated successfully');
+
+                  Navigator.pop(ctx);
+                  _loadData();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Product updated successfully'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                } catch (e) {
+                  print('❌ Product update error: $e');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: $e'),
+                      backgroundColor: Colors.red,
+                      duration: const Duration(seconds: 5),
+                    ),
+                  );
+                }
+              },
+              child: const Text('Update', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -486,10 +775,12 @@ class _ProductManagementTabState extends State<_ProductManagementTab> {
                         ),
                         trailing: PopupMenuButton(
                           itemBuilder: (ctx) => [
+                            const PopupMenuItem(value: 'edit', child: Text('Edit Product')),
                             const PopupMenuItem(value: 'stock', child: Text('Update Stock')),
                             const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red))),
                           ],
                           onSelected: (value) {
+                            if (value == 'edit') _showEditProductDialog(product);
                             if (value == 'stock') _showEditStockDialog(product);
                             if (value == 'delete') _showDeleteConfirmDialog(product);
                           },

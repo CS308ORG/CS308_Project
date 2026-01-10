@@ -63,7 +63,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
 
     try {
       final products = await _pmService.getProducts();
-      final categories = await _pmService.getCategories();
+      final categories = await _pmService.getCategories(includeEmpty: true);
       if (!mounted) return;
       setState(() {
         _products = products;

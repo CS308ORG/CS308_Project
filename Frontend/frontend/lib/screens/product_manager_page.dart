@@ -301,6 +301,7 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
     final totalAmount = order['total_amount'] ?? 0;
     final items = order['items'] ?? [];
     final userId = order['user_id'];
+    final customerName = order['customer_name'] ?? 'Unknown Customer';
 
     Color statusColor;
     IconData statusIcon;
@@ -390,6 +391,15 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
                             color: Colors.grey[600],
                           ),
                         ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Name: $customerName',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey[700],
+                          ),
+                        ),
                       ],
                     ),
                   ],
@@ -445,6 +455,10 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
             ),
             SizedBox(height: 12),
             ...items.map((item) {
+              final productId = item['product_id'];
+              final productName = item['product_name'] ?? 'Unknown Product';
+              final quantity = item['quantity'];
+              
               return Container(
                 margin: EdgeInsets.only(bottom: 8),
                 padding: EdgeInsets.all(12),
@@ -461,12 +475,25 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
                     ),
                     SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        'Product ID: ${item['product_id']}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Product ID: $productId',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Name: $productName',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     Container(
@@ -476,7 +503,7 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        'Qty: ${item['quantity']}',
+                        'Qty: $quantity',
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,

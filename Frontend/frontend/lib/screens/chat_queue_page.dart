@@ -233,13 +233,6 @@ class _ChatQueuePageState extends State<ChatQueuePage> {
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  if (customerInfo['email'] != null) ...[
-                                    Text(
-                                      customerInfo['email'],
-                                      style: TextStyle(fontSize: 12),
-                                    ),
-                                    SizedBox(height: 4),
-                                  ],
                                   if (lastMessage != null) ...[
                                     Text(
                                       lastMessage['message'] ?? 'Attachment',

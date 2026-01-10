@@ -632,7 +632,47 @@ app.get('/orders/delivery', authenticate, authorize(['product_manager']), async 
             .where('status', 'in', ['processing', 'in-transit', 'delivered'])
             .get();
 
-        const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const orders = await Promise.all(snapshot.docs.map(async (doc) => {
+            const orderData = { id: doc.id, ...doc.data() };
+            
+            // Fetch customer name from users collection
+            if (orderData.user_id) {
+                try {
+                    const userDoc = await db.collection('users').doc(String(orderData.user_id)).get();
+                    if (userDoc.exists) {
+                        const userData = userDoc.data();
+                        orderData.customer_name = userData.name || userData.email || 'Unknown';
+                    } else {
+                        orderData.customer_name = 'Unknown Customer';
+                    }
+                } catch (e) {
+                    console.warn('Failed to fetch user for order:', orderData.user_id, e.message);
+                    orderData.customer_name = 'Unknown Customer';
+                }
+            }
+
+            // Fetch product names for each item
+            if (orderData.items && Array.isArray(orderData.items)) {
+                orderData.items = await Promise.all(orderData.items.map(async (item) => {
+                    if (item.product_id) {
+                        try {
+                            const productDoc = await db.collection('products').doc(String(item.product_id)).get();
+                            if (productDoc.exists) {
+                                item.product_name = productDoc.data().name || 'Unknown Product';
+                            } else {
+                                item.product_name = 'Product Not Found';
+                            }
+                        } catch (e) {
+                            console.warn('Failed to fetch product:', item.product_id, e.message);
+                            item.product_name = 'Unknown Product';
+                        }
+                    }
+                    return item;
+                }));
+            }
+            
+            return orderData;
+        }));
 
         orders.sort((a, b) => {
             const statusPriority = {
@@ -3492,6 +3532,7 @@ app.get('/products/manage', authenticate, authorize(['product_manager', 'admin']
 // POST /products - Add new product
 app.post('/products', authenticate, authorize(['product_manager', 'admin']), async (req, res) => {
     try {
+        console.log('📦 Add product request received');
         const {
             name,
             description,
@@ -3505,7 +3546,16 @@ app.post('/products', authenticate, authorize(['product_manager', 'admin']), asy
             image_url
         } = req.body;
 
+        console.log('Product data:', {
+            name,
+            price,
+            quantity_in_stock,
+            category,
+            hasImageUrl: !!image_url
+        });
+
         if (!name || price === undefined || quantity_in_stock === undefined) {
+            console.error('Missing required product fields');
             return res.status(400).json({ error: 'Name, price, and quantity_in_stock are required' });
         }
 
@@ -3536,13 +3586,16 @@ app.post('/products', authenticate, authorize(['product_manager', 'admin']), asy
 
         const docRef = await db.collection('products').add(newProduct);
 
+        console.log('✅ Product created successfully:', docRef.id, newProductId);
+
         return res.status(201).json({
             success: true,
             message: 'Product created successfully',
             product: { id: docRef.id, ...newProduct }
         });
     } catch (err) {
-        console.error('Create product error:', err);
+        console.error('❌ Create product error:', err.message);
+        console.error('Full error:', err);
         return res.status(500).json({ error: 'Failed to create product', details: err.message });
     }
 });
@@ -3664,30 +3717,29 @@ app.put('/products/:id/stock', authenticate, authorize(['product_manager', 'admi
 app.get('/categories', async (req, res) => {
     try {
         const includeEmpty = req.query.include_empty === 'true';
+        const allCategories = new Set();
         
+        // Always get categories from categories collection first
+        try {
+            const categoriesSnapshot = await db.collection('categories').get();
+            categoriesSnapshot.forEach(doc => {
+                const catName = doc.data().name;
+                if (catName) allCategories.add(catName);
+            });
+        } catch (e) {
+            // Categories collection might not exist
+            console.warn('Categories collection not found:', e.message);
+        }
+
         // Get categories from products (these have actual products)
         const snapshot = await db.collection('products').get();
-        const productCategories = new Set();
         
         snapshot.forEach(doc => {
             const category = doc.data().category;
-            if (category) productCategories.add(category);
+            if (category) allCategories.add(category);
         });
 
-        // If include_empty, also add categories from categories collection
-        if (includeEmpty) {
-            try {
-                const categoriesSnapshot = await db.collection('categories').get();
-                categoriesSnapshot.forEach(doc => {
-                    const catName = doc.data().name;
-                    if (catName) productCategories.add(catName);
-                });
-            } catch (e) {
-                // Categories collection might not exist
-            }
-        }
-
-        const categories = Array.from(productCategories).sort();
+        const categories = Array.from(allCategories).sort();
 
         return res.json({ categories });
     } catch (err) {
@@ -3979,21 +4031,34 @@ app.post('/chat/upload', async (req, res) => {
 });
 
 // Upload product image
-app.post('/products/upload-image', authenticate, authorize(['product_manager', 'admin']), async (req, res) => {
+app.post('/upload/product-image', authenticate, authorize(['product_manager', 'admin']), async (req, res) => {
     try {
-        const { fileName, fileData, mimeType } = req.body;
+        console.log('Upload product image request received');
+        const { fileName, base64Data, fileData, mimeType } = req.body;
 
-        if (!fileName || !fileData) {
-            return res.status(400).json({ error: 'fileName and fileData required' });
+        // Support both base64Data and fileData parameter names
+        const imageData = base64Data || fileData;
+
+        console.log('Image upload details:', {
+            fileName,
+            hasImageData: !!imageData,
+            imageDataLength: imageData ? imageData.length : 0,
+            mimeType
+        });
+
+        if (!fileName || !imageData) {
+            console.error('Missing required fields:', { fileName: !!fileName, imageData: !!imageData });
+            return res.status(400).json({ error: 'fileName and base64Data/fileData required' });
         }
 
         // Validate that it's an image
         if (!mimeType || !mimeType.startsWith('image/')) {
+            console.error('Invalid mimeType:', mimeType);
             return res.status(400).json({ error: 'Only image files are allowed' });
         }
 
         // Decode base64 file data
-        const buffer = Buffer.from(fileData, 'base64');
+        const buffer = Buffer.from(imageData, 'base64');
 
         // Generate unique filename
         const timestamp = Date.now();
@@ -4014,7 +4079,7 @@ app.post('/products/upload-image', authenticate, authorize(['product_manager', '
         // Get public URL
         const publicUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
 
-        console.log('Product image uploaded:', publicUrl);
+        console.log('✅ Product image uploaded successfully:', publicUrl);
 
         return res.json({
             url: publicUrl,
@@ -4022,8 +4087,9 @@ app.post('/products/upload-image', authenticate, authorize(['product_manager', '
             mimeType: mimeType
         });
     } catch (err) {
-        console.error('Product image upload error:', err);
-        return res.status(500).json({ error: 'Failed to upload product image' });
+        console.error('❌ Product image upload error:', err.message);
+        console.error('Full error:', err);
+        return res.status(500).json({ error: 'Failed to upload product image', details: err.message });
     }
 });
 
@@ -4111,8 +4177,8 @@ app.get('/support/chats/queue', authenticate, authorize(['support_agent', 'admin
         const chats = await Promise.all(chatsSnapshot.docs.map(async doc => {
             const chatData = doc.data();
             let customerInfo = {
-                name: chatData.customerName || 'Guest',
-                email: chatData.customerEmail || null
+                name: chatData.customerName || 'Guest'
+                // Email intentionally excluded for privacy
             };
 
             // If logged-in customer, fetch their profile
@@ -4122,7 +4188,7 @@ app.get('/support/chats/queue', authenticate, authorize(['support_agent', 'admin
                     const userData = userDoc.data();
                     customerInfo = {
                         name: userData.name || 'Customer',
-                        email: userData.email || null,
+                        // Email intentionally excluded for privacy
                         userId: chatData.userId
                     };
                 }
@@ -4270,8 +4336,8 @@ app.get('/support/chats/:chatId/customer-context', authenticate, authorize(['sup
         if (!chatData.userId) {
             return res.json({
                 isGuest: true,
-                customerName: chatData.customerName,
-                customerEmail: chatData.customerEmail
+                customerName: chatData.customerName
+                // Email intentionally excluded for privacy
             });
         }
 
@@ -4331,26 +4397,50 @@ app.get('/support/chats/:chatId/customer-context', authenticate, authorize(['sup
 
         console.log('Processed orders:', orders.length);
 
-        // Get customer's cart
-        const cartSnapshot = await db.collection('cart')
-            .where('user_id', '==', chatData.userId)
-            .get();
-
-        const cartItems = cartSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
+        // Get customer's cart from user document
+        const cartProductIds = userData.saved_cart || [];
+        let cartItems = [];
+        
+        if (cartProductIds.length > 0) {
+            // Fetch product details for cart items
+            for (const cartItem of cartProductIds) {
+                try {
+                    const productId = cartItem.product_id || cartItem.id;
+                    const productDoc = await db.collection('products').doc(String(productId)).get();
+                    if (productDoc.exists) {
+                        cartItems.push({
+                            id: productDoc.id,
+                            quantity: cartItem.quantity || 1,
+                            ...productDoc.data()
+                        });
+                    }
+                } catch (e) {
+                    console.warn('Failed to fetch cart product:', cartItem, e.message);
+                }
+            }
+        }
         console.log('Cart items:', cartItems.length);
 
-        // Get customer's wishlist
-        const wishlistSnapshot = await db.collection('wishlists')
-            .where('user_id', '==', chatData.userId)
-            .get();
-
-        const wishlistItems = wishlistSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
+        // Get customer's wishlist from user document
+        const wishlistProductIds = userData.wishlist || [];
+        let wishlistItems = [];
+        
+        if (wishlistProductIds.length > 0) {
+            // Fetch product details for wishlist items
+            for (const productId of wishlistProductIds) {
+                try {
+                    const productDoc = await db.collection('products').doc(String(productId)).get();
+                    if (productDoc.exists) {
+                        wishlistItems.push({
+                            id: productDoc.id,
+                            ...productDoc.data()
+                        });
+                    }
+                } catch (e) {
+                    console.warn('Failed to fetch wishlist product:', productId, e.message);
+                }
+            }
+        }
         console.log('Wishlist items:', wishlistItems.length);
 
         const responseData = {
@@ -4358,9 +4448,9 @@ app.get('/support/chats/:chatId/customer-context', authenticate, authorize(['sup
             profile: {
                 uid: chatData.userId,
                 name: userData.name,
-                email: userData.email,
                 role: userData.role,
                 created_at: userData.created_at?.toDate ? userData.created_at.toDate() : userData.created_at
+                // Email intentionally excluded for privacy
             },
             recentOrders: orders,
             cart: cartItems,
