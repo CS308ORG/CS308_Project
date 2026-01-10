@@ -393,16 +393,19 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
                 )
               else
                 ..._customerContext!['recentOrders'].take(5).map<Widget>((order) {
-                  final orderId = order['id']?.toString().substring(0, 8) ?? 'N/A';
-                  final status = order['status'] ?? 'pending';
-                  final totalAmount = order['total_amount'] ?? order['totalAmount'] ?? 0;
-                  final deliveryStatus = order['delivery_status'] ?? order['deliveryStatus'] ?? 'processing';
+                  final orderIdFull = order['id']?.toString() ?? order['order_id']?.toString() ?? 'N/A';
+                  final orderId = orderIdFull.length > 8 ? orderIdFull.substring(0, 8) : orderIdFull;
+                  final status = order['status']?.toString() ?? 'pending';
+                  final rawAmount = order['total_amount'] ?? order['totalAmount'] ?? 0;
+                  final totalAmount = (rawAmount is num) ? rawAmount.toDouble() : double.tryParse(rawAmount.toString()) ?? 0.0;
+                  final deliveryStatus = order['delivery_status']?.toString() ?? order['deliveryStatus']?.toString() ?? 'processing';
                   final orderDate = order['created_at'] ?? order['createdAt'];
 
                   Color statusColor;
                   IconData statusIcon;
+                  final statusLower = status.toLowerCase();
 
-                  switch (status.toLowerCase()) {
+                  switch (statusLower) {
                     case 'completed':
                       statusColor = Colors.green;
                       statusIcon = Icons.check_circle;
