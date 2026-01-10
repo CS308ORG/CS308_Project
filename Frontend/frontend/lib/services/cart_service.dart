@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'auth_service.dart';
 
 class CartService extends ChangeNotifier {
   static final CartService _instance = CartService._internal();
@@ -11,13 +13,16 @@ class CartService extends ChangeNotifier {
   }
 
   static const String _guestKey = 'cart_items_guest';
+  static const String _baseUrl = 'http://localhost:3000';
   String _storageKey = _guestKey;
+  String? _currentUserId;
 
   List<Map<String, dynamic>> _cartItems = [];
 
   List<Map<String, dynamic>> get items => _cartItems;
 
   Future<void> loadCartForUser(String? userId) async {
+    _currentUserId = userId;
     _storageKey = userId == null
         ? _guestKey
         : 'cart_items_${userId.toString()}';
@@ -36,13 +41,48 @@ class CartService extends ChangeNotifier {
     } else {
       _cartItems = [];
     }
+    
+    // Sync with backend if user is logged in
+    if (userId != null) {
+      await _syncCartToBackend();
+    }
     notifyListeners();
+  }
+
+  // Sync cart to backend for support agent visibility
+  Future<void> _syncCartToBackend() async {
+    if (_currentUserId == null) return;
+    
+    try {
+      final token = AuthService().token;
+      if (token == null) return;
+
+      final cartItemsForBackend = _cartItems.map((item) => {
+        'product_id': item['id'] ?? item['product_id'],
+        'quantity': item['quantity'] ?? 1,
+        'name': item['name'] ?? 'Unknown',
+        'price': item['price'] ?? 0,
+      }).toList();
+
+      await http.post(
+        Uri.parse('$_baseUrl/users/$_currentUserId/cart'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'items': cartItemsForBackend}),
+      );
+    } catch (e) {
+      print('Error syncing cart to backend: $e');
+    }
   }
 
   void _persistCart() {
     SharedPreferences.getInstance().then(
       (prefs) => prefs.setString(_storageKey, jsonEncode(_cartItems)),
     );
+    // Also sync to backend for support agent visibility
+    _syncCartToBackend();
   }
 
   void updateQuantity(int index, int quantity) {
@@ -99,6 +139,8 @@ class CartService extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_storageKey);
     }
+    // Also clear on backend
+    await _syncCartToBackend();
   }
 
   void mergeCart(List<dynamic> guestItems) {
