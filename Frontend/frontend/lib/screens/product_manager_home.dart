@@ -49,6 +49,7 @@ class _ProductManagerHomeState extends State<ProductManagerHome> with SingleTick
       appBar: AppBar(
         title: const Text('Product Manager Dashboard'),
         backgroundColor: const Color(0xFFFF7733),
+        iconTheme: const IconThemeData(color: Colors.white),
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.white,

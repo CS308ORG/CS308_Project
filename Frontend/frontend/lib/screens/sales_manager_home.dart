@@ -19,6 +19,7 @@ class SalesManagerHome extends StatelessWidget {
       appBar: AppBar(
         title: Text('Sales Manager Dashboard'),
         backgroundColor: Color(0xFFFF7733),
+        iconTheme: IconThemeData(color: Colors.white),
         actions: [
           IconButton(
             icon: Icon(Icons.logout),

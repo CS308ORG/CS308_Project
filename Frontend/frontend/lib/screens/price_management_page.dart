@@ -27,15 +27,16 @@ class _PriceManagementPageState extends State<PriceManagementPage> {
     setState(() => _isLoading = true);
     try {
       final products = await _apiService.getProducts();
-      
-      // Extract unique categories
+
+      // Extract unique categories from category or category_id
       final categories = <String>{'All'};
       for (var p in products) {
-        if (p['category'] != null && p['category'].toString().isNotEmpty) {
-          categories.add(p['category'].toString());
+        final cat = p['category'] ?? _getCategoryName(p['category_id']);
+        if (cat != null && cat.toString().isNotEmpty && cat != 'Uncategorized') {
+          categories.add(cat.toString());
         }
       }
-      
+
       setState(() {
         _products = products;
         _filteredProducts = products;
@@ -53,11 +54,30 @@ class _PriceManagementPageState extends State<PriceManagementPage> {
       _filteredProducts = _products.where((p) {
         final name = (p['name'] ?? '').toString().toLowerCase();
         final matchesSearch = name.contains(_searchQuery.toLowerCase());
-        final matchesCategory = _selectedCategory == 'All' || 
-            p['category'] == _selectedCategory;
+        final productCategory = p['category'] ?? _getCategoryName(p['category_id']);
+        final matchesCategory = _selectedCategory == 'All' ||
+            productCategory == _selectedCategory;
         return matchesSearch && matchesCategory;
       }).toList();
     });
+  }
+
+  String _getCategoryName(dynamic categoryId) {
+    if (categoryId == null) return 'Uncategorized';
+    final Map<int, String> categoryMap = {
+      1: 'Electronics',
+      2: 'Clothing',
+      3: 'Home & Garden',
+      4: 'Computers',
+      5: 'Audio',
+      6: 'Mobile',
+      7: 'Kitchen',
+      8: 'Gaming',
+      9: 'Sports',
+      10: 'Books',
+    };
+    final id = int.tryParse(categoryId.toString()) ?? 0;
+    return categoryMap[id] ?? 'Uncategorized';
   }
 
   void _showSnackBar(String message, {bool isError = false}) {
@@ -286,6 +306,7 @@ class _PriceManagementPageState extends State<PriceManagementPage> {
         ),
         backgroundColor: Color(0xFFFF7733),
         foregroundColor: Colors.white,
+        iconTheme: IconThemeData(color: Colors.white),
         elevation: 2,
         actions: [
           IconButton(
@@ -384,7 +405,7 @@ class _PriceManagementPageState extends State<PriceManagementPage> {
     final originalPrice = (product['original_price'] ?? price).toDouble();
     final discountRate = (product['discount_rate'] ?? 0).toDouble();
     final stock = product['quantity_in_stock'] ?? 0;
-    final category = product['category'] ?? 'N/A';
+    final category = product['category'] ?? _getCategoryName(product['category_id']);
     final imageUrl = product['image_url'];
 
     return Card(

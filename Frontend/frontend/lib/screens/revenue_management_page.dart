@@ -104,6 +104,7 @@ class _RevenueManagementPageState extends State<RevenueManagementPage> {
         ),
         backgroundColor: Color(0xFFFF7733),
         foregroundColor: Colors.white,
+        iconTheme: IconThemeData(color: Colors.white),
         elevation: 2,
         actions: [
           IconButton(

@@ -249,6 +249,7 @@ class _ReviewModerationPageState extends State<ReviewModerationPage> {
       backgroundColor: Color(0xFFFFF5E6),
       appBar: AppBar(
         backgroundColor: Color(0xFFFF7733),
+        iconTheme: IconThemeData(color: Colors.white),
         title: Text('Review Moderation'),
         actions: [
           IconButton(

@@ -63,6 +63,7 @@ class _SupportAgentHomeState extends State<SupportAgentHome> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Support Agent Dashboard'),
+        iconTheme: IconThemeData(color: Colors.white),
         actions: [
           IconButton(
             icon: Icon(Icons.logout),

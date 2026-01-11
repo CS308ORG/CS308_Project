@@ -919,6 +919,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
       appBar: AppBar(
         title: Text('Stock & Product Management'),
         backgroundColor: Color(0xFFFF7733),
+        iconTheme: IconThemeData(color: Colors.white),
         actions: [
           IconButton(
             icon: Icon(Icons.refresh),

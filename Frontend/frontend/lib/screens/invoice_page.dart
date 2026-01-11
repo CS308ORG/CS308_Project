@@ -40,6 +40,7 @@ class InvoicePage extends StatelessWidget {
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Color(0xFFFF7733),
+        iconTheme: IconThemeData(color: Colors.white),
         title: Row(
           children: [
             Container(

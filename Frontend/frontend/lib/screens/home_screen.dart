@@ -1089,10 +1089,10 @@ class _StoreLayoutState extends State<StoreLayout> {
                     // Refresh header after returning from login
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF7733),
+                    backgroundColor: const Color(0xFF2196F3),
                     foregroundColor: Colors.white,
                     elevation: 3,
-                    shadowColor: const Color(0xFFFF7733).withOpacity(0.4),
+                    shadowColor: const Color(0xFF2196F3).withOpacity(0.4),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -1106,8 +1106,8 @@ class _StoreLayoutState extends State<StoreLayout> {
                     MaterialPageRoute(builder: (context) => SignupScreen()),
                   ),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFFFF7733),
-                    side: const BorderSide(color: Color(0xFFFF7733), width: 1.5),
+                    foregroundColor: const Color(0xFF2196F3),
+                    side: const BorderSide(color: Color(0xFF2196F3), width: 1.5),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -2817,7 +2817,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ElevatedButton(
             onPressed: _loadProducts,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF7733),
+              backgroundColor: const Color(0xFF2196F3),
             ),
             child: const Text('Retry'),
           ),
@@ -3346,8 +3346,8 @@ class ProductCardWidgetState extends State<ProductCardWidget> {
                                       gradient: (!widget.isOutOfStock && widget.canAddToCart)
                                           ? LinearGradient(
                                               colors: [
-                                                const Color(0xFFFF7733),
-                                                const Color(0xFFFFA366),
+                                                const Color(0xFF2196F3),
+                                                const Color(0xFF64B5F6),
                                               ],
                                             )
                                           : null,
@@ -3358,7 +3358,7 @@ class ProductCardWidgetState extends State<ProductCardWidget> {
                                       boxShadow: (!widget.isOutOfStock && widget.canAddToCart)
                                           ? [
                                               BoxShadow(
-                                                color: const Color(0xFFFF7733)
+                                                color: const Color(0xFF2196F3)
                                                     .withOpacity(0.4),
                                                 blurRadius: 8,
                                                 offset: const Offset(0, 4),
@@ -3962,7 +3962,7 @@ extension _HomeScreenStateMethods on _HomeScreenState {
           ElevatedButton(
             onPressed: _loadProducts,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF7733),
+              backgroundColor: const Color(0xFF2196F3),
             ),
             child: const Text('Retry'),
           ),

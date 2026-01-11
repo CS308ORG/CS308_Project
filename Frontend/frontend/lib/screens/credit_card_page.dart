@@ -79,6 +79,7 @@ class _CreditCardPageState extends State<CreditCardPage> {
       appBar: AppBar(
         title: Text('Payment'),
         backgroundColor: Color(0xFFFF7733),
+        iconTheme: IconThemeData(color: Colors.white),
       ),
       body: SingleChildScrollView(
         child: Center(
