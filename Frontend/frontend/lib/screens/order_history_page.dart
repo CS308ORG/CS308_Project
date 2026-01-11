@@ -931,21 +931,45 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   }
 
   Widget _buildRefundStatusChip(String status) {
-    final isApproved = status == 'refunded';
+    Color bgColor;
+    Color borderColor;
+    Color textColor;
+    String label;
+
+    switch (status) {
+      case 'refunded':
+        bgColor = Colors.green.shade50;
+        borderColor = Colors.green.shade200;
+        textColor = Colors.green.shade700;
+        label = "Refunded";
+        break;
+      case 'rejected':
+        bgColor = Colors.red.shade50;
+        borderColor = Colors.red.shade200;
+        textColor = Colors.red.shade700;
+        label = "Refund Declined";
+        break;
+      case 'requested':
+      default:
+        bgColor = Colors.orange.shade50;
+        borderColor = Colors.orange.shade200;
+        textColor = Colors.orange.shade700;
+        label = "Refund Pending";
+        break;
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: isApproved ? Colors.green.shade50 : Colors.red.shade50,
+        color: bgColor,
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(
-          color: isApproved ? Colors.green.shade200 : Colors.red.shade200,
-        ),
+        border: Border.all(color: borderColor),
       ),
       child: Text(
-        isApproved ? "Refunded" : "Refund Declined",
+        label,
         style: TextStyle(
           fontSize: 11,
-          color: isApproved ? Colors.green.shade700 : Colors.red.shade700,
+          color: textColor,
           fontWeight: FontWeight.w500,
         ),
       ),
