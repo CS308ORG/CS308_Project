@@ -209,7 +209,7 @@ class _ProductDetailState extends State<ProductDetail> {
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFFFF7733),
+                  color: Color(0xFF1E3A8A),
                 ),
               ),
               const SizedBox(height: 16),
@@ -245,14 +245,14 @@ class _ProductDetailState extends State<ProductDetail> {
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFFFF7733),
+                  color: Color(0xFF1E3A8A),
                 ),
               ),
               const SizedBox(height: 16),
 
               if (_isLoadingReviews)
                 const Center(
-                  child: CircularProgressIndicator(color: Color(0xFFFF7733)),
+                  child: CircularProgressIndicator(color: Color(0xFF1E3A8A)),
                 )
               else ...[
                 if (_myPendingReview != null)
@@ -323,7 +323,7 @@ class _ProductDetailState extends State<ProductDetail> {
                 }
               },
         style: ElevatedButton.styleFrom(
-          backgroundColor: isDisabled ? Colors.grey : const Color(0xFFFF7733),
+          backgroundColor: isDisabled ? Colors.grey : const Color(0xFF1E3A8A),
           foregroundColor: Colors.white,
         ),
         child: const Text("Send Review"),
@@ -490,7 +490,7 @@ class _ProductDetailState extends State<ProductDetail> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFFF7733), width: 2),
+        border: Border.all(color: const Color(0xFF1E3A8A), width: 2),
       ),
       child: Stack(
         children: [
@@ -503,7 +503,7 @@ class _ProductDetailState extends State<ProductDetail> {
                       if (loadingProgress == null) return child;
                       return const Center(
                         child: CircularProgressIndicator(
-                          color: Color(0xFFFF7733),
+                          color: Color(0xFF1E3A8A),
                         ),
                       );
                     },
@@ -588,7 +588,7 @@ class _ProductDetailState extends State<ProductDetail> {
                     padding: EdgeInsets.zero,
                     icon: const Icon(
                       Icons.arrow_back_ios,
-                      color: Color(0xFFFF7733),
+                      color: Color(0xFF1E3A8A),
                       size: 18,
                     ),
                     onPressed: () => setState(() => _currentImageIndex--),
@@ -620,7 +620,7 @@ class _ProductDetailState extends State<ProductDetail> {
                     padding: EdgeInsets.zero,
                     icon: const Icon(
                       Icons.arrow_forward_ios,
-                      color: Color(0xFFFF7733),
+                      color: Color(0xFF1E3A8A),
                       size: 18,
                     ),
                     onPressed: () => setState(() => _currentImageIndex++),
@@ -656,7 +656,7 @@ class _ProductDetailState extends State<ProductDetail> {
           "${price ?? 0} ₺",
           style: const TextStyle(
             fontSize: 24,
-            color: Color(0xFFFF7733),
+            color: Color(0xFF1E3A8A),
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -674,7 +674,7 @@ class _ProductDetailState extends State<ProductDetail> {
           style: ElevatedButton.styleFrom(
             backgroundColor: (isOutOfStock || !canAddToCart)
                 ? Colors.grey
-                : const Color(0xFFFF7733),
+                : const Color(0xFF1E3A8A),
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 22),
           ),

@@ -102,7 +102,7 @@ class _RevenueManagementPageState extends State<RevenueManagementPage> {
           'Revenue & Profit Analysis',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Color(0xFFFF7733),
+        backgroundColor: Color(0xFF1E3A8A),
         foregroundColor: Colors.white,
         iconTheme: IconThemeData(color: Colors.white),
         elevation: 2,
@@ -151,7 +151,7 @@ class _RevenueManagementPageState extends State<RevenueManagementPage> {
                   icon: Icon(Icons.calculate),
                   label: Text('Calculate'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xFFFF7733),
+                    backgroundColor: Color(0xFF1E3A8A),
                   ),
                 ),
               ],
@@ -161,7 +161,7 @@ class _RevenueManagementPageState extends State<RevenueManagementPage> {
           // Content
           Expanded(
             child: _isLoading
-                ? Center(child: CircularProgressIndicator(color: Color(0xFFFF7733)))
+                ? Center(child: CircularProgressIndicator(color: Color(0xFF1E3A8A)))
                 : _error != null
                     ? Center(
                         child: Column(
@@ -253,7 +253,7 @@ class _RevenueManagementPageState extends State<RevenueManagementPage> {
                 'Total Profit',
                 '\$${totalProfit.toStringAsFixed(2)}',
                 Icons.trending_up,
-                totalProfit >= 0 ? Colors.blue : Colors.red,
+                totalProfit >= 0 ? Color(0xFF1E3A8A) : Colors.red,
               ),
             ),
             SizedBox(width: 12),
@@ -284,7 +284,7 @@ class _RevenueManagementPageState extends State<RevenueManagementPage> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.receipt_long, color: Color(0xFFFF7733)),
+              Icon(Icons.receipt_long, color: Color(0xFF1E3A8A)),
               SizedBox(width: 8),
               Text(
                 'Orders: $orderCount',
@@ -483,7 +483,7 @@ class _RevenueManagementPageState extends State<RevenueManagementPage> {
                       }),
                     ),
                     isCurved: true,
-                    color: Colors.blue,
+                    color: Color(0xFF1E3A8A),
                     barWidth: 3,
                     dotData: FlDotData(show: false),
                     belowBarData: BarAreaData(show: false),
@@ -503,7 +503,7 @@ class _RevenueManagementPageState extends State<RevenueManagementPage> {
             children: [
               _buildLegendItem('Revenue', Colors.green),
               SizedBox(width: 24),
-              _buildLegendItem('Profit', Colors.blue),
+              _buildLegendItem('Profit', Color(0xFF1E3A8A)),
             ],
           ),
         ],

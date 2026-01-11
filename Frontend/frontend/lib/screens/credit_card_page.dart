@@ -78,7 +78,7 @@ class _CreditCardPageState extends State<CreditCardPage> {
       backgroundColor: Color(0xFFFFF5E6),
       appBar: AppBar(
         title: Text('Payment'),
-        backgroundColor: Color(0xFFFF7733),
+        backgroundColor: Color(0xFF1E3A8A),
         iconTheme: IconThemeData(color: Colors.white),
       ),
       body: SingleChildScrollView(
@@ -94,7 +94,7 @@ class _CreditCardPageState extends State<CreditCardPage> {
                   padding: EdgeInsets.all(20),
                 decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [Color(0xFFFF7733), Color(0xFFFF9955)],
+                      colors: [Color(0xFF1E3A8A), Color(0xFFFF9955)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
@@ -178,8 +178,8 @@ class _CreditCardPageState extends State<CreditCardPage> {
                         icon: Icon(Icons.arrow_back),
                     label: Text('Go Back'),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: Color(0xFFFF7733),
-                          side: BorderSide(color: Color(0xFFFF7733)),
+                          foregroundColor: Color(0xFF1E3A8A),
+                          side: BorderSide(color: Color(0xFF1E3A8A)),
                           padding: EdgeInsets.symmetric(vertical: 16),
                         ),
                       ),
@@ -202,7 +202,7 @@ class _CreditCardPageState extends State<CreditCardPage> {
                             : Icon(Icons.payment),
                         label: Text(_isProcessing ? 'Processing...' : 'Pay Now'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFFFF7733),
+                      backgroundColor: Color(0xFF1E3A8A),
                       foregroundColor: Colors.white,
                           padding: EdgeInsets.symmetric(vertical: 16),
                           textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -230,10 +230,10 @@ class _CreditCardPageState extends State<CreditCardPage> {
       child: Container(
         padding: EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? Color(0xFFFF7733) : Colors.white,
+          color: isSelected ? Color(0xFF1E3A8A) : Colors.white,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: Color(0xFFFF7733),
+            color: Color(0xFF1E3A8A),
             width: 2,
           ),
         ),
@@ -241,7 +241,7 @@ class _CreditCardPageState extends State<CreditCardPage> {
           children: [
             Icon(
               icon,
-              color: isSelected ? Colors.white : Color(0xFFFF7733),
+              color: isSelected ? Colors.white : Color(0xFF1E3A8A),
               size: 24,
             ),
             SizedBox(width: 16),
@@ -265,7 +265,7 @@ class _CreditCardPageState extends State<CreditCardPage> {
               },
               activeColor: Colors.white,
               fillColor: WidgetStateProperty.all(
-                isSelected ? Colors.white : Color(0xFFFF7733),
+                isSelected ? Colors.white : Color(0xFF1E3A8A),
               ),
             ),
           ],
@@ -307,7 +307,7 @@ class _CreditCardPageState extends State<CreditCardPage> {
                   Container(
                     padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Color(0xFFFF7733).withOpacity(0.1),
+                      color: Color(0xFF1E3A8A).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
@@ -315,7 +315,7 @@ class _CreditCardPageState extends State<CreditCardPage> {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFFFF7733),
+                        color: Color(0xFF1E3A8A),
                       ),
                     ),
                   ),
@@ -329,13 +329,13 @@ class _CreditCardPageState extends State<CreditCardPage> {
               decoration: InputDecoration(
                 labelText: 'Card Number',
                 hintText: '1234 5678 9012 3456',
-                prefixIcon: Icon(Icons.credit_card, color: Color(0xFFFF7733)),
+                prefixIcon: Icon(Icons.credit_card, color: Color(0xFF1E3A8A)),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Color(0xFFFF7733), width: 2),
+                  borderSide: BorderSide(color: Color(0xFF1E3A8A), width: 2),
                 ),
               ),
               keyboardType: TextInputType.number,
@@ -372,13 +372,13 @@ class _CreditCardPageState extends State<CreditCardPage> {
               decoration: InputDecoration(
                 labelText: 'Cardholder Name',
                 hintText: 'JOHN DOE',
-                prefixIcon: Icon(Icons.person, color: Color(0xFFFF7733)),
+                prefixIcon: Icon(Icons.person, color: Color(0xFF1E3A8A)),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Color(0xFFFF7733), width: 2),
+                  borderSide: BorderSide(color: Color(0xFF1E3A8A), width: 2),
                 ),
               ),
               textCapitalization: TextCapitalization.characters,
@@ -404,13 +404,13 @@ class _CreditCardPageState extends State<CreditCardPage> {
                     decoration: InputDecoration(
                       labelText: 'Expiry Date',
                       hintText: 'MM/YY',
-                      prefixIcon: Icon(Icons.calendar_today, color: Color(0xFFFF7733)),
+                      prefixIcon: Icon(Icons.calendar_today, color: Color(0xFF1E3A8A)),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: Color(0xFFFF7733), width: 2),
+                        borderSide: BorderSide(color: Color(0xFF1E3A8A), width: 2),
                       ),
                     ),
                     keyboardType: TextInputType.number,
@@ -451,13 +451,13 @@ class _CreditCardPageState extends State<CreditCardPage> {
                     decoration: InputDecoration(
                       labelText: 'CVV',
                       hintText: '123',
-                      prefixIcon: Icon(Icons.lock, color: Color(0xFFFF7733)),
+                      prefixIcon: Icon(Icons.lock, color: Color(0xFF1E3A8A)),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: Color(0xFFFF7733), width: 2),
+                        borderSide: BorderSide(color: Color(0xFF1E3A8A), width: 2),
                       ),
                     ),
                     keyboardType: TextInputType.number,
@@ -592,7 +592,7 @@ class _CreditCardPageState extends State<CreditCardPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('OK', style: TextStyle(color: Color(0xFFFF7733))),
+            child: Text('OK', style: TextStyle(color: Color(0xFF1E3A8A))),
           ),
         ],
       ),

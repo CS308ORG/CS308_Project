@@ -248,7 +248,7 @@ class _ReviewModerationPageState extends State<ReviewModerationPage> {
     return Scaffold(
       backgroundColor: Color(0xFFFFF5E6),
       appBar: AppBar(
-        backgroundColor: Color(0xFFFF7733),
+        backgroundColor: Color(0xFF1E3A8A),
         iconTheme: IconThemeData(color: Colors.white),
         title: Text('Review Moderation'),
         actions: [
@@ -293,7 +293,7 @@ class _ReviewModerationPageState extends State<ReviewModerationPage> {
                 SwitchListTile(
                   title: Text('Show only eligible reviews'),
                   value: _showOnlyEligible,
-                  activeColor: Color(0xFFFF7733),
+                  activeColor: Color(0xFF1E3A8A),
                   onChanged: (value) {
                     setState(() => _showOnlyEligible = value);
                   },
@@ -307,7 +307,7 @@ class _ReviewModerationPageState extends State<ReviewModerationPage> {
             child: _loading
                 ? Center(
                     child: CircularProgressIndicator(
-                      color: Color(0xFFFF7733),
+                      color: Color(0xFF1E3A8A),
                     ),
                   )
                 : _error != null
@@ -413,7 +413,7 @@ class _ReviewModerationPageState extends State<ReviewModerationPage> {
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFFFF7733),
+                          color: Color(0xFF1E3A8A),
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -581,7 +581,7 @@ class _ReviewModerationPageState extends State<ReviewModerationPage> {
           ElevatedButton(
             onPressed: _loadReviews,
             style: ElevatedButton.styleFrom(
-              backgroundColor: Color(0xFFFF7733),
+              backgroundColor: Color(0xFF1E3A8A),
             ),
             child: Text('Retry'),
           ),

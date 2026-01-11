@@ -3862,7 +3862,11 @@ app.get('/categories', async (req, res) => {
         try {
             const categoriesSnapshot = await db.collection('categories').get();
             categoriesSnapshot.forEach(doc => {
-                const catName = doc.data().name;
+                let catName = doc.data().name;
+                // Normalize category names (e.g., "pet food" -> "Pet Food")
+                if (catName && catName.toLowerCase() === 'pet food') {
+                    catName = 'Pet Food';
+                }
                 if (catName) allCategories.add(catName);
             });
         } catch (e) {
@@ -3878,7 +3882,15 @@ app.get('/categories', async (req, res) => {
             if (category) allCategories.add(category);
         });
 
-        const categories = Array.from(allCategories).sort();
+        // Normalize category names (e.g., "pet food" -> "Pet Food")
+        const normalizedCategories = Array.from(allCategories).map(cat => {
+            if (cat.toLowerCase() === 'pet food') {
+                return 'Pet Food';
+            }
+            return cat;
+        });
+
+        const categories = Array.from(new Set(normalizedCategories)).sort();
 
         return res.json({ categories });
     } catch (err) {
@@ -4229,6 +4241,68 @@ app.post('/upload/product-image', authenticate, authorize(['product_manager', 'a
         console.error('❌ Product image upload error:', err.message);
         console.error('Full error:', err);
         return res.status(500).json({ error: 'Failed to upload product image', details: err.message });
+    }
+});
+
+// Upload logo image (public endpoint - no auth required for logo upload)
+app.post('/upload/logo', async (req, res) => {
+    try {
+        console.log('Upload logo request received');
+        const { fileName, base64Data, fileData, mimeType } = req.body;
+
+        // Support both base64Data and fileData parameter names
+        const imageData = base64Data || fileData;
+
+        console.log('Logo upload details:', {
+            fileName,
+            hasImageData: !!imageData,
+            imageDataLength: imageData ? imageData.length : 0,
+            mimeType
+        });
+
+        if (!fileName || !imageData) {
+            console.error('Missing required fields:', { fileName: !!fileName, imageData: !!imageData });
+            return res.status(400).json({ error: 'fileName and base64Data/fileData required' });
+        }
+
+        // Validate that it's an image
+        if (!mimeType || !mimeType.startsWith('image/')) {
+            console.error('Invalid mimeType:', mimeType);
+            return res.status(400).json({ error: 'Only image files are allowed' });
+        }
+
+        // Decode base64 file data
+        const buffer = Buffer.from(imageData, 'base64');
+
+        // Use fixed filename for logo
+        const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const storagePath = `logos/${sanitizedFileName}`;
+
+        // Upload to Firebase Storage
+        const file = bucket.file(storagePath);
+        await file.save(buffer, {
+            metadata: {
+                contentType: mimeType
+            }
+        });
+
+        // Make the file publicly accessible
+        await file.makePublic();
+
+        // Get public URL
+        const publicUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
+
+        console.log('✅ Logo uploaded successfully:', publicUrl);
+
+        return res.json({
+            url: publicUrl,
+            fileName: sanitizedFileName,
+            mimeType: mimeType
+        });
+    } catch (err) {
+        console.error('❌ Logo upload error:', err.message);
+        console.error('Full error:', err);
+        return res.status(500).json({ error: 'Failed to upload logo', details: err.message });
     }
 });
 

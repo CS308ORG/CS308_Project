@@ -14,7 +14,7 @@ class AdminHome extends StatelessWidget {
       backgroundColor: Color(0xFFFFF5E6),
       appBar: AppBar(
         title: Text('Admin Dashboard'),
-        backgroundColor: Color(0xFFFF7733),
+        backgroundColor: Color(0xFF1E3A8A),
         iconTheme: IconThemeData(color: Colors.white),
         actions: [
           IconButton(
@@ -35,7 +35,7 @@ class AdminHome extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.admin_panel_settings, size: 100, color: Color(0xFFFF7733)),
+              Icon(Icons.admin_panel_settings, size: 100, color: Color(0xFF1E3A8A)),
               SizedBox(height: 32),
               Text(
                 'Admin Control Panel',
@@ -50,7 +50,7 @@ class AdminHome extends StatelessWidget {
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Color(0xFFFF7733),
+                  color: Color(0xFF1E3A8A),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(

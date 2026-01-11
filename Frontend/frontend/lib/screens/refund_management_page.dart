@@ -171,7 +171,7 @@ class _RefundManagementPageState extends State<RefundManagementPage> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.account_balance_wallet, color: Color(0xFFFF7733), size: 32),
+                    Icon(Icons.account_balance_wallet, color: Color(0xFF1E3A8A), size: 32),
                     SizedBox(width: 12),
                     Expanded(
                       child: Text(
@@ -447,19 +447,19 @@ class _RefundManagementPageState extends State<RefundManagementPage> {
                   padding: EdgeInsets.fromLTRB(24, 32, 24, 24),
                   child: Row(
                     children: [
-                      Icon(Icons.money_off, color: Color(0xFFFF7733), size: 32),
+                      Icon(Icons.money_off, color: Color(0xFF1E3A8A), size: 32),
                       SizedBox(width: 12),
                       Text(
                         'Refund Management',
                         style: TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFFFF7733),
+                          color: Color(0xFF1E3A8A),
                         ),
                       ),
                       Spacer(),
                       IconButton(
-                        icon: Icon(Icons.refresh, color: Color(0xFFFF7733)),
+                        icon: Icon(Icons.refresh, color: Color(0xFF1E3A8A)),
                         onPressed: _fetchRefunds,
                         tooltip: 'Refresh',
                       ),
@@ -509,7 +509,7 @@ class _RefundManagementPageState extends State<RefundManagementPage> {
                     ? Padding(
                         padding: EdgeInsets.all(48),
                         child: Center(
-                          child: CircularProgressIndicator(color: Color(0xFFFF7733)),
+                          child: CircularProgressIndicator(color: Color(0xFF1E3A8A)),
                         ),
                       )
                     : _filteredRefunds.isEmpty
@@ -538,7 +538,7 @@ class _RefundManagementPageState extends State<RefundManagementPage> {
                             ),
                           )
                         : RefreshIndicator(
-                            color: const Color(0xFFFF7733),
+                            color: const Color(0xFF1E3A8A),
                             onRefresh: _fetchRefunds,
                             child: ListView.builder(
                               shrinkWrap: true,
@@ -571,7 +571,7 @@ class _RefundManagementPageState extends State<RefundManagementPage> {
       child: Container(
         padding: EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? Color(0xFFFF7733) : Colors.transparent,
+          color: isSelected ? Color(0xFF1E3A8A) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
@@ -697,7 +697,7 @@ class _RefundManagementPageState extends State<RefundManagementPage> {
                   icon: Icon(Icons.edit, size: 18),
                   label: Text('Process Refund'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xFFFF7733),
+                    backgroundColor: Color(0xFF1E3A8A),
                     foregroundColor: Colors.white,
                     padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                     shape: RoundedRectangleBorder(

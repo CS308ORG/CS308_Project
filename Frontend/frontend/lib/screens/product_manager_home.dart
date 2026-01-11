@@ -48,7 +48,7 @@ class _ProductManagerHomeState extends State<ProductManagerHome> with SingleTick
       backgroundColor: const Color(0xFFFFF5E6),
       appBar: AppBar(
         title: const Text('Product Manager Dashboard'),
-        backgroundColor: const Color(0xFFFF7733),
+        backgroundColor: const Color(0xFF1E3A8A),
         iconTheme: const IconThemeData(color: Colors.white),
         bottom: TabBar(
           controller: _tabController,
@@ -257,7 +257,7 @@ class _ProductManagementTabState extends State<_ProductManagementTab> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF7733)),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E3A8A)),
             onPressed: () async {
               if (nameController.text.isEmpty || priceController.text.isEmpty || stockController.text.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -461,7 +461,7 @@ class _ProductManagementTabState extends State<_ProductManagementTab> {
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF7733)),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E3A8A)),
               onPressed: () async {
                 if (nameController.text.isEmpty || priceController.text.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -569,7 +569,7 @@ class _ProductManagementTabState extends State<_ProductManagementTab> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF7733)),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E3A8A)),
             onPressed: () async {
               try {
                 await widget.pmService.updateStock(
@@ -652,7 +652,7 @@ class _ProductManagementTabState extends State<_ProductManagementTab> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFFFF7733)));
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF1E3A8A)));
     }
 
     if (_error != null) {
@@ -709,7 +709,7 @@ class _ProductManagementTabState extends State<_ProductManagementTab> {
           child: Row(
             children: [
               ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF7733)),
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E3A8A)),
                 onPressed: _showAddProductDialog,
                 icon: const Icon(Icons.add, color: Colors.white),
                 label: const Text('Add Product', style: TextStyle(color: Colors.white)),
@@ -742,10 +742,10 @@ class _ProductManagementTabState extends State<_ProductManagementTab> {
                       margin: const EdgeInsets.only(bottom: 12),
                       child: ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: isLowStock ? Colors.red.shade100 : const Color(0xFFFF7733).withOpacity(0.2),
+                          backgroundColor: isLowStock ? Colors.red.shade100 : const Color(0xFF1E3A8A).withOpacity(0.2),
                           child: Icon(
                             Icons.inventory_2,
-                            color: isLowStock ? Colors.red : const Color(0xFFFF7733),
+                            color: isLowStock ? Colors.red : const Color(0xFF1E3A8A),
                           ),
                         ),
                         title: Text(product['name'] ?? 'Unknown'),
@@ -840,7 +840,7 @@ class _CategoryManagementDialogState extends State<_CategoryManagementDialog> {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.add, color: Color(0xFFFF7733)),
+                  icon: const Icon(Icons.add, color: Color(0xFF1E3A8A)),
                   onPressed: () async {
                     if (_newCategoryController.text.isNotEmpty) {
                       try {
@@ -965,7 +965,7 @@ class _DeliveryManagementTabState extends State<_DeliveryManagementTab> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFFFF7733)));
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF1E3A8A)));
     }
 
     if (_error != null) {
@@ -1030,8 +1030,8 @@ class _DeliveryManagementTabState extends State<_DeliveryManagementTab> {
     return FilterChip(
       label: Text('$label ($count)'),
       selected: isSelected,
-      selectedColor: const Color(0xFFFF7733).withOpacity(0.2),
-      checkmarkColor: const Color(0xFFFF7733),
+      selectedColor: const Color(0xFF1E3A8A).withOpacity(0.2),
+      checkmarkColor: const Color(0xFF1E3A8A),
       onSelected: (selected) {
         setState(() {
           _statusFilter = value;
@@ -1047,7 +1047,7 @@ class _DeliveryManagementTabState extends State<_DeliveryManagementTab> {
     Color statusColor;
     switch (status) {
       case 'processing': statusColor = Colors.orange; break;
-      case 'in-transit': statusColor = Colors.blue; break;
+      case 'in-transit': statusColor = Color(0xFF1E3A8A); break;
       case 'delivered': statusColor = Colors.green; break;
       default: statusColor = Colors.grey;
     }
@@ -1125,7 +1125,7 @@ class _DeliveryManagementTabState extends State<_DeliveryManagementTab> {
                       if (status == 'processing')
                         Expanded(
                           child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                            style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF1E3A8A)),
                             onPressed: () => _updateStatus(
                               delivery['order_id']?.toString() ?? delivery['delivery_id'],
                               'in-transit'
@@ -1221,7 +1221,7 @@ class _ReviewModerationTabState extends State<_ReviewModerationTab> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFFFF7733)));
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF1E3A8A)));
     }
 
     return RefreshIndicator(
@@ -1347,7 +1347,7 @@ class _InvoiceViewTabState extends State<_InvoiceViewTab> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFFFF7733)));
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF1E3A8A)));
     }
 
     if (_error != null) {
@@ -1377,7 +1377,7 @@ class _InvoiceViewTabState extends State<_InvoiceViewTab> {
                   margin: const EdgeInsets.only(bottom: 12),
                   child: ExpansionTile(
                     leading: const CircleAvatar(
-                      backgroundColor: Color(0xFFFF7733),
+                      backgroundColor: Color(0xFF1E3A8A),
                       child: Icon(Icons.receipt, color: Colors.white),
                     ),
                     title: Text('Invoice #${invoice['order_id']}'),

@@ -419,7 +419,7 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
                       statusIcon = Icons.hourglass_empty;
                       break;
                     default:
-                      statusColor = Colors.blue;
+                      statusColor = Color(0xFF1E3A8A);
                       statusIcon = Icons.info;
                   }
 
@@ -598,7 +598,7 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
                                           'Subtotal: \$$subtotal',
                                           style: TextStyle(
                                             fontSize: 11,
-                                            color: Color(0xFFFF7733),
+                                            color: Color(0xFF1E3A8A),
                                             fontWeight: FontWeight.bold,
                                           ),
                                         ),
@@ -700,7 +700,7 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
                                       style: TextStyle(
                                         fontSize: 13,
                                         fontWeight: FontWeight.bold,
-                                        color: Color(0xFFFF7733),
+                                        color: Color(0xFF1E3A8A),
                                       ),
                                     ),
                                   ],
@@ -983,7 +983,7 @@ class _ChatConversationPageState extends State<ChatConversationPage> {
                                               iconColor = Colors.red[700]!;
                                             } else {
                                               icon = Icons.attach_file;
-                                              iconColor = Colors.blue;
+                                              iconColor = Color(0xFF1E3A8A);
                                             }
 
                                             return Container(

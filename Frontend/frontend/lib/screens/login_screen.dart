@@ -143,14 +143,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     colors: [
-                                      Color(0xFFFF7733),
-                                      Color(0xFFFFA366),
+                                      Color(0xFF1E3A8A),
+                                      Color(0xFF3B82F6),
                                     ],
                                   ),
                                   shape: BoxShape.circle,
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Color(0xFFFF7733).withOpacity(0.4),
+                                      color: Color(0xFF1E3A8A).withOpacity(0.4),
                                       blurRadius: 20,
                                       offset: Offset(0, 10),
                                     ),
@@ -168,7 +168,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                 style: TextStyle(
                                   fontSize: 32,
                                   fontWeight: FontWeight.bold,
-                                  color: Color(0xFFFF7733),
+                                  color: Color(0xFF1E3A8A),
                                   letterSpacing: -0.5,
                                 ),
                               ),
@@ -224,7 +224,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                       ),
                                       prefixIcon: Icon(
                                         Icons.email_outlined,
-                                        color: Color(0xFFFF7733),
+                                        color: Color(0xFF1E3A8A),
                                       ),
                                       filled: true,
                                       fillColor: Colors.grey[50],
@@ -242,7 +242,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                       focusedBorder: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(12),
                                         borderSide: BorderSide(
-                                          color: Color(0xFFFF7733),
+                                          color: Color(0xFF1E3A8A),
                                           width: 2,
                                         ),
                                       ),
@@ -288,7 +288,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                       ),
                                       prefixIcon: Icon(
                                         Icons.lock_outlined,
-                                        color: Color(0xFFFF7733),
+                                        color: Color(0xFF1E3A8A),
                                       ),
                                       suffixIcon: IconButton(
                                         icon: Icon(
@@ -319,7 +319,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                       focusedBorder: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(12),
                                         borderSide: BorderSide(
-                                          color: Color(0xFFFF7733),
+                                          color: Color(0xFF1E3A8A),
                                           width: 2,
                                         ),
                                       ),
@@ -387,14 +387,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                     decoration: BoxDecoration(
                                       gradient: LinearGradient(
                                         colors: [
-                                          Color(0xFFFF7733),
-                                          Color(0xFFFFA366),
+                                          Color(0xFF1E3A8A),
+                                          Color(0xFF3B82F6),
                                         ],
                                       ),
                                       borderRadius: BorderRadius.circular(12),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: Color(0xFFFF7733).withOpacity(0.4),
+                                          color: Color(0xFF1E3A8A).withOpacity(0.4),
                                           blurRadius: 15,
                                           offset: Offset(0, 8),
                                         ),
@@ -444,7 +444,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                             TextSpan(
                                             text: 'Sign Up',
                               style: TextStyle(
-                                              color: Color(0xFFFF7733),
+                                              color: Color(0xFF1E3A8A),
                                 fontWeight: FontWeight.bold,
                                               fontSize: 15,
                               ),

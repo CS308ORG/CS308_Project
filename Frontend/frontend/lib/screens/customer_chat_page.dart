@@ -728,7 +728,7 @@ class _CustomerChatConversationPageState extends State<CustomerChatConversationP
 
                           // Customer = sağda mavi, Support = solda turuncu
                           final alignment = isCustomer ? Alignment.centerRight : Alignment.centerLeft;
-                          final color = isCustomer ? Colors.blue : (isSupport ? Colors.orange[700] : Colors.grey[300]);
+                          final color = isCustomer ? Color(0xFF1E3A8A) : (isSupport ? Colors.orange[700] : Colors.grey[300]);
                           final textColor = (isCustomer || isSupport) ? Colors.white : Colors.black;
 
                           return Align(
@@ -1019,7 +1019,7 @@ class _CustomerChatConversationPageState extends State<CustomerChatConversationP
                                       Icon(
                                         _getFileIcon(file.extension ?? ''),
                                         size: 30,
-                                        color: Colors.blue,
+                                        color: Color(0xFF1E3A8A),
                                       ),
                                       SizedBox(height: 4),
                                       Text(

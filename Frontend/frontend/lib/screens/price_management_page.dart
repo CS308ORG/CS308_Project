@@ -142,7 +142,7 @@ class _PriceManagementPageState extends State<PriceManagementPage> {
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Color(0xFFFF7733),
+              backgroundColor: Color(0xFF1E3A8A),
             ),
             child: Text('Update Price'),
           ),
@@ -226,7 +226,7 @@ class _PriceManagementPageState extends State<PriceManagementPage> {
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFFFF7733),
+                            color: Color(0xFF1E3A8A),
                           ),
                         ),
                       ],
@@ -261,7 +261,7 @@ class _PriceManagementPageState extends State<PriceManagementPage> {
                     }
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xFFFF7733),
+                    backgroundColor: Color(0xFF1E3A8A),
                   ),
                   child: Text('Apply Discount'),
                 ),
@@ -304,7 +304,7 @@ class _PriceManagementPageState extends State<PriceManagementPage> {
           'Price & Discount Management',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Color(0xFFFF7733),
+        backgroundColor: Color(0xFF1E3A8A),
         foregroundColor: Colors.white,
         iconTheme: IconThemeData(color: Colors.white),
         elevation: 2,
@@ -354,7 +354,7 @@ class _PriceManagementPageState extends State<PriceManagementPage> {
                             setState(() => _selectedCategory = category);
                             _filterProducts();
                           },
-                          selectedColor: Color(0xFFFF7733),
+                          selectedColor: Color(0xFF1E3A8A),
                           labelStyle: TextStyle(
                             color: isSelected ? Colors.white : Colors.black,
                           ),
@@ -370,7 +370,7 @@ class _PriceManagementPageState extends State<PriceManagementPage> {
           // Products List
           Expanded(
             child: _isLoading
-                ? Center(child: CircularProgressIndicator(color: Color(0xFFFF7733)))
+                ? Center(child: CircularProgressIndicator(color: Color(0xFF1E3A8A)))
                 : _filteredProducts.isEmpty
                     ? Center(
                         child: Column(
@@ -479,7 +479,7 @@ class _PriceManagementPageState extends State<PriceManagementPage> {
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 18,
-                          color: discountRate > 0 ? Color(0xFFFF7733) : Colors.black,
+                          color: discountRate > 0 ? Color(0xFF1E3A8A) : Colors.black,
                         ),
                       ),
                       if (discountRate > 0) ...[
@@ -510,7 +510,7 @@ class _PriceManagementPageState extends State<PriceManagementPage> {
             Column(
               children: [
                 IconButton(
-                  icon: Icon(Icons.attach_money, color: Color(0xFFFF7733)),
+                  icon: Icon(Icons.attach_money, color: Color(0xFF1E3A8A)),
                   onPressed: () => _showPriceDialog(Map<String, dynamic>.from(product)),
                   tooltip: 'Set Price',
                 ),

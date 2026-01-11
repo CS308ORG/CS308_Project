@@ -146,7 +146,7 @@ class _SupportAgentHomeState extends State<SupportAgentHome> {
                     icon: Icons.chat_bubble_outline,
                     title: 'Active Chats',
                     subtitle: 'View and respond to chats',
-                    color: Colors.blue,
+                    color: Color(0xFF1E3A8A),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -186,28 +186,54 @@ class _SupportAgentHomeState extends State<SupportAgentHome> {
     required Color color,
     required VoidCallback onTap,
   }) {
+    final isNavy = color == Color(0xFF1E3A8A);
     return Card(
       elevation: 2,
-      child: InkWell(
-        onTap: onTap,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  icon,
-                  size: 40,
-                  color: color,
-                ),
+      ),
+      child: Container(
+        decoration: isNavy
+          ? BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Color(0xFF1E3A8A).withOpacity(0.1),
+                  Color(0xFF3B82F6).withOpacity(0.1),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
+              borderRadius: BorderRadius.circular(16),
+            )
+          : null,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: isNavy
+                      ? LinearGradient(
+                          colors: [
+                            Color(0xFF1E3A8A).withOpacity(0.2),
+                            Color(0xFF3B82F6).withOpacity(0.2),
+                          ],
+                        )
+                      : null,
+                    color: isNavy ? null : color.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    icon,
+                    size: 40,
+                    color: color,
+                  ),
+                ),
               SizedBox(height: 12),
               Text(
                 title,
@@ -229,6 +255,7 @@ class _SupportAgentHomeState extends State<SupportAgentHome> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

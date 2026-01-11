@@ -61,22 +61,27 @@ String getCategoryNames(Map<String, dynamic> product) {
     10: 'Books',
   };
   List<String> names = [];
-  
+
   // Check category_ids (array of IDs)
   if (product['category_ids'] is List) {
     for (var id in product['category_ids']) {
       if (idToName.containsKey(id)) names.add(idToName[id]!);
     }
-  } 
+  }
   // Check category_id (single ID)
   else if (product['category_id'] != null) {
     int? id = int.tryParse(product['category_id'].toString());
     if (id != null && idToName.containsKey(id)) names.add(idToName[id]!);
   }
-  
+
   // Check category (direct name for dynamic categories)
-  if (product['category'] != null && product['category'].toString().isNotEmpty) {
-    final catName = product['category'].toString();
+  if (product['category'] != null &&
+      product['category'].toString().isNotEmpty) {
+    String catName = product['category'].toString();
+    // Normalize category names (e.g., "pet food" -> "Pet Food")
+    if (catName.toLowerCase() == 'pet food') {
+      catName = 'Pet Food';
+    }
     if (!names.contains(catName)) {
       names.add(catName);
     }
@@ -118,10 +123,11 @@ class _StoreLayoutState extends State<StoreLayout> {
   List<dynamic> _suggestions = [];
   bool _showSuggestions = false;
   Set<String> _hoveredCategories = {};
-  
+  bool _categoriesExpanded = true; // Categories collapse state
+
   // Dynamic categories from backend
   List<String> _dynamicCategories = [];
-  
+
   // Notification state (11.3)
   int _unreadNotificationCount = 0;
   List<dynamic> _notifications = [];
@@ -135,8 +141,9 @@ class _StoreLayoutState extends State<StoreLayout> {
     _loadDynamicCategories();
     // Initialize _lastLoadedUserId to track current user on first load
     final authService = AuthService();
-    _lastLoadedUserId = authService.currentUser?['id']?.toString() ??
-                        authService.currentUser?['user_id']?.toString();
+    _lastLoadedUserId =
+        authService.currentUser?['id']?.toString() ??
+        authService.currentUser?['user_id']?.toString();
     // Listen for auth changes to reload notifications
     AuthService().addListener(_onAuthChanged);
     _searchFocusNode.addListener(() {
@@ -154,8 +161,9 @@ class _StoreLayoutState extends State<StoreLayout> {
 
   void _onAuthChanged() {
     final authService = AuthService();
-    final currentUserId = authService.currentUser?['id']?.toString() ??
-                          authService.currentUser?['user_id']?.toString();
+    final currentUserId =
+        authService.currentUser?['id']?.toString() ??
+        authService.currentUser?['user_id']?.toString();
 
     // Reload notifications if user changed or logged out
     if (currentUserId != _lastLoadedUserId) {
@@ -178,11 +186,12 @@ class _StoreLayoutState extends State<StoreLayout> {
   Future<void> _loadNotifications() async {
     final authService = AuthService();
     if (!authService.isLoggedIn) return;
-    
-    final userId = authService.currentUser?['id']?.toString() ?? 
-                   authService.currentUser?['user_id']?.toString();
+
+    final userId =
+        authService.currentUser?['id']?.toString() ??
+        authService.currentUser?['user_id']?.toString();
     if (userId == null) return;
-    
+
     try {
       final count = await _apiService.getUnreadNotificationCount(userId);
       final notifications = await _apiService.getNotifications(userId);
@@ -200,9 +209,10 @@ class _StoreLayoutState extends State<StoreLayout> {
   // Show notifications dialog (11.3)
   void _showNotificationsDialog(BuildContext context) async {
     final authService = AuthService();
-    final userId = authService.currentUser?['id']?.toString() ?? 
-                   authService.currentUser?['user_id']?.toString();
-    
+    final userId =
+        authService.currentUser?['id']?.toString() ??
+        authService.currentUser?['user_id']?.toString();
+
     await showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -231,33 +241,46 @@ class _StoreLayoutState extends State<StoreLayout> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.notifications_none, size: 64, color: Colors.grey),
+                      Icon(
+                        Icons.notifications_none,
+                        size: 64,
+                        color: Colors.grey,
+                      ),
                       SizedBox(height: 16),
-                      Text('No notifications', style: TextStyle(color: Colors.grey)),
+                      Text(
+                        'No notifications',
+                        style: TextStyle(color: Colors.grey),
+                      ),
                     ],
                   ),
                 )
               : Builder(
                   builder: (context) {
                     // Sort: unread first, then by created_at descending
-                    final sortedNotifications = List<dynamic>.from(_notifications)
-                      ..sort((a, b) {
-                        final aRead = a['is_read'] == true ? 1 : 0;
-                        final bRead = b['is_read'] == true ? 1 : 0;
-                        if (aRead != bRead) return aRead - bRead; // Unread (0) before read (1)
-                        // If same read status, sort by date descending
-                        final aDate = DateTime.tryParse(a['created_at'] ?? '') ?? DateTime(1970);
-                        final bDate = DateTime.tryParse(b['created_at'] ?? '') ?? DateTime(1970);
-                        return bDate.compareTo(aDate);
-                      });
+                    final sortedNotifications =
+                        List<dynamic>.from(_notifications)..sort((a, b) {
+                          final aRead = a['is_read'] == true ? 1 : 0;
+                          final bRead = b['is_read'] == true ? 1 : 0;
+                          if (aRead != bRead)
+                            return aRead - bRead; // Unread (0) before read (1)
+                          // If same read status, sort by date descending
+                          final aDate =
+                              DateTime.tryParse(a['created_at'] ?? '') ??
+                              DateTime(1970);
+                          final bDate =
+                              DateTime.tryParse(b['created_at'] ?? '') ??
+                              DateTime(1970);
+                          return bDate.compareTo(aDate);
+                        });
 
                     return ListView.builder(
                       itemCount: sortedNotifications.length,
                       itemBuilder: (context, index) {
                         final notification = sortedNotifications[index];
                         final isRead = notification['is_read'] == true;
-                        final isRefundNotification = notification['type'] == 'refund_approved' ||
-                                                     notification['type'] == 'refund_rejected';
+                        final isRefundNotification =
+                            notification['type'] == 'refund_approved' ||
+                            notification['type'] == 'refund_rejected';
                         return Card(
                           color: isRead ? Colors.grey[100] : Color(0xFFFFF5E6),
                           child: ListTile(
@@ -265,22 +288,25 @@ class _StoreLayoutState extends State<StoreLayout> {
                               notification['type'] == 'price_drop'
                                   ? Icons.local_offer
                                   : isRefundNotification
-                                      ? (notification['type'] == 'refund_approved'
-                                          ? Icons.check_circle
-                                          : Icons.cancel)
-                                      : Icons.notifications,
+                                  ? (notification['type'] == 'refund_approved'
+                                        ? Icons.check_circle
+                                        : Icons.cancel)
+                                  : Icons.notifications,
                               color: isRead
                                   ? Colors.grey
                                   : (notification['type'] == 'refund_approved'
-                                      ? Colors.green
-                                      : notification['type'] == 'refund_rejected'
-                                          ? Colors.red
-                                          : Color(0xFFFF7733)),
+                                        ? Colors.green
+                                        : notification['type'] ==
+                                              'refund_rejected'
+                                        ? Colors.red
+                                        : Color(0xFFFF7733)),
                             ),
                             title: Text(
                               notification['title'] ?? 'Notification',
                               style: TextStyle(
-                                fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
+                                fontWeight: isRead
+                                    ? FontWeight.normal
+                                    : FontWeight.bold,
                                 color: isRead ? Colors.grey : Colors.black,
                               ),
                             ),
@@ -291,13 +317,20 @@ class _StoreLayoutState extends State<StoreLayout> {
                                   notification['message'] ?? '',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: isRead ? Colors.grey : Colors.black87,
+                                    color: isRead
+                                        ? Colors.grey
+                                        : Colors.black87,
                                   ),
                                 ),
                                 SizedBox(height: 4),
                                 Text(
-                                  _formatNotificationDate(notification['created_at']),
-                                  style: TextStyle(fontSize: 10, color: Colors.grey),
+                                  _formatNotificationDate(
+                                    notification['created_at'],
+                                  ),
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.grey,
+                                  ),
                                 ),
                               ],
                             ),
@@ -310,21 +343,30 @@ class _StoreLayoutState extends State<StoreLayout> {
                                     context: context,
                                     builder: (ctx) => AlertDialog(
                                       title: Text('Delete Notification'),
-                                      content: Text('Are you sure you want to delete this notification?'),
+                                      content: Text(
+                                        'Are you sure you want to delete this notification?',
+                                      ),
                                       actions: [
                                         TextButton(
-                                          onPressed: () => Navigator.pop(ctx, false),
+                                          onPressed: () =>
+                                              Navigator.pop(ctx, false),
                                           child: Text('Cancel'),
                                         ),
                                         TextButton(
-                                          onPressed: () => Navigator.pop(ctx, true),
-                                          child: Text('Delete', style: TextStyle(color: Colors.red)),
+                                          onPressed: () =>
+                                              Navigator.pop(ctx, true),
+                                          child: Text(
+                                            'Delete',
+                                            style: TextStyle(color: Colors.red),
+                                          ),
                                         ),
                                       ],
                                     ),
                                   );
                                   if (confirmed == true) {
-                                    await _apiService.deleteNotification(notification['id']);
+                                    await _apiService.deleteNotification(
+                                      notification['id'],
+                                    );
                                     _loadNotifications();
                                     // Refresh the dialog by closing and reopening
                                     Navigator.pop(dialogContext);
@@ -336,34 +378,42 @@ class _StoreLayoutState extends State<StoreLayout> {
                             onTap: () async {
                               // Mark as read
                               if (!isRead && notification['id'] != null) {
-                                await _apiService.markNotificationAsRead(notification['id']);
+                                await _apiService.markNotificationAsRead(
+                                  notification['id'],
+                                );
                                 _loadNotifications();
                               }
                               Navigator.pop(dialogContext);
 
                               // Navigate based on notification type
-                              if (isRefundNotification && notification['order_id'] != null) {
+                              if (isRefundNotification &&
+                                  notification['order_id'] != null) {
                                 // Navigate to order history page for refund notifications
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                     builder: (context) => OrderHistoryPage(
-                                      highlightOrderId: notification['order_id'],
+                                      highlightOrderId:
+                                          notification['order_id'],
                                     ),
                                   ),
                                 );
                               } else if (notification['product_id'] != null) {
                                 // Navigate to product if it's a price drop notification
                                 final product = _allProducts.firstWhere(
-                                  (p) => p['product_id'] == notification['product_id'] ||
-                                         p['id'] == notification['product_id'].toString(),
+                                  (p) =>
+                                      p['product_id'] ==
+                                          notification['product_id'] ||
+                                      p['id'] ==
+                                          notification['product_id'].toString(),
                                   orElse: () => null,
                                 );
                                 if (product != null) {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (context) => ProductDetail(product: product),
+                                      builder: (context) =>
+                                          ProductDetail(product: product),
                                     ),
                                   );
                                 }
@@ -478,20 +528,24 @@ class _StoreLayoutState extends State<StoreLayout> {
       ),
     );
   }
-  
+
   Future<bool?> _getWishlistStatus(Map<String, dynamic> product) async {
     if (!AuthService().isLoggedIn) return null;
     try {
       String? uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) {
         final currentUser = AuthService().currentUser;
-        uid = currentUser?['id']?.toString() ?? currentUser?['user_id']?.toString();
+        uid =
+            currentUser?['id']?.toString() ??
+            currentUser?['user_id']?.toString();
       }
       if (uid == null) return null;
       final apiService = ApiService();
       final wishlist = await apiService.getWishlist(uid);
       final productId = (product['id'] ?? product['product_id']).toString();
-      return wishlist.any((p) => (p['id'] ?? p['product_id']).toString() == productId);
+      return wishlist.any(
+        (p) => (p['id'] ?? p['product_id']).toString() == productId,
+      );
     } catch (e) {
       print("Error checking wishlist status: $e");
       return null;
@@ -522,17 +576,33 @@ class _StoreLayoutState extends State<StoreLayout> {
             ],
           ),
           // Support button - available for all users (guests and logged-in)
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => CustomerChatPage()),
-              );
-            },
-            icon: Icon(Icons.chat_bubble_outline),
-            label: Text('Support'),
-            backgroundColor: Theme.of(context).primaryColor,
-            foregroundColor: Colors.white,
+          floatingActionButton: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [const Color(0xFF1E3A8A), const Color(0xFF3B82F6)],
+              ),
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF1E3A8A).withOpacity(0.4),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: FloatingActionButton.extended(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => CustomerChatPage()),
+                );
+              },
+              icon: Icon(Icons.chat_bubble_outline),
+              label: Text('Support'),
+              backgroundColor: Colors.transparent,
+              foregroundColor: Colors.white,
+              elevation: 0,
+            ),
           ),
         );
       },
@@ -551,11 +621,7 @@ class _StoreLayoutState extends State<StoreLayout> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFFFF5E6),
-              Color(0xFFFFE8D6),
-              Color(0xFFFFF5E6),
-            ],
+            colors: [Color(0xFFFFF5E6), Color(0xFFFFE8D6), Color(0xFFFFF5E6)],
           ),
         ),
         child: SafeArea(
@@ -566,10 +632,7 @@ class _StoreLayoutState extends State<StoreLayout> {
                 padding: EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [
-                      Color(0xFFFF7733),
-                      Color(0xFFFFA366),
-                    ],
+                    colors: [Color(0xFFFF7733), Color(0xFFFFA366)],
                   ),
                 ),
                 child: Row(
@@ -591,10 +654,16 @@ class _StoreLayoutState extends State<StoreLayout> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Image.network(
-                            'https://firebasestorage.googleapis.com/v0/b/cs308db.firebasestorage.app/o/AllisHere-Logo.png?alt=media&token=e5cd3f31-b65f-4fa4-a53e-7bdcab64582d',
-                            height: 55,
-                            fit: BoxFit.contain,
+                          Container(
+                            color: Colors.transparent,
+                            child: Image.network(
+                              'https://storage.googleapis.com/cs308db.firebasestorage.app/logos/all-is-here-transparent-removebg-preview.png',
+                              height: 75,
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Icon(Icons.image, size: 75);
+                              },
+                            ),
                           ),
                           if (isLoggedIn)
                             Text(
@@ -630,7 +699,9 @@ class _StoreLayoutState extends State<StoreLayout> {
                     _buildDrawerItem(
                       icon: Icons.shopping_cart_rounded,
                       title: 'Shopping Cart',
-                      badge: CartService().itemCount > 0 ? CartService().itemCount : null,
+                      badge: CartService().itemCount > 0
+                          ? CartService().itemCount
+                          : null,
                       onTap: () {
                         Navigator.pop(context);
                         Navigator.push(
@@ -646,7 +717,9 @@ class _StoreLayoutState extends State<StoreLayout> {
                         Navigator.pop(context);
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => OrderHistoryPage()),
+                          MaterialPageRoute(
+                            builder: (context) => OrderHistoryPage(),
+                          ),
                         );
                       },
                     ),
@@ -660,7 +733,9 @@ class _StoreLayoutState extends State<StoreLayout> {
                             Navigator.pop(context);
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (context) => StockManagementPage()),
+                              MaterialPageRoute(
+                                builder: (context) => StockManagementPage(),
+                              ),
                             );
                           },
                         ),
@@ -672,7 +747,9 @@ class _StoreLayoutState extends State<StoreLayout> {
                             Navigator.pop(context);
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (context) => ProductManagerPage()),
+                              MaterialPageRoute(
+                                builder: (context) => ProductManagerPage(),
+                              ),
                             );
                           },
                         ),
@@ -684,7 +761,9 @@ class _StoreLayoutState extends State<StoreLayout> {
                             Navigator.pop(context);
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (context) => ReviewModerationPage()),
+                              MaterialPageRoute(
+                                builder: (context) => ReviewModerationPage(),
+                              ),
                             );
                           },
                         ),
@@ -696,7 +775,9 @@ class _StoreLayoutState extends State<StoreLayout> {
                             Navigator.pop(context);
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (context) => InvoiceManagementPage()),
+                              MaterialPageRoute(
+                                builder: (context) => InvoiceManagementPage(),
+                              ),
                             );
                           },
                         ),
@@ -708,10 +789,12 @@ class _StoreLayoutState extends State<StoreLayout> {
                             Navigator.pop(context);
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (context) => AdminHome(
-                                username: userName,
-                                role: userRole,
-                              )),
+                              MaterialPageRoute(
+                                builder: (context) => AdminHome(
+                                  username: userName,
+                                  role: userRole,
+                                ),
+                              ),
                             );
                           },
                         ),
@@ -723,7 +806,9 @@ class _StoreLayoutState extends State<StoreLayout> {
                             Navigator.pop(context);
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (context) => RevenueManagementPage()),
+                              MaterialPageRoute(
+                                builder: (context) => RevenueManagementPage(),
+                              ),
                             );
                           },
                         ),
@@ -734,7 +819,9 @@ class _StoreLayoutState extends State<StoreLayout> {
                             Navigator.pop(context);
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (context) => PriceManagementPage()),
+                              MaterialPageRoute(
+                                builder: (context) => PriceManagementPage(),
+                              ),
                             );
                           },
                         ),
@@ -745,7 +832,9 @@ class _StoreLayoutState extends State<StoreLayout> {
                             Navigator.pop(context);
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (context) => InvoiceManagementPage()),
+                              MaterialPageRoute(
+                                builder: (context) => InvoiceManagementPage(),
+                              ),
                             );
                           },
                         ),
@@ -756,7 +845,9 @@ class _StoreLayoutState extends State<StoreLayout> {
                             Navigator.pop(context);
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (context) => RefundManagementPage()),
+                              MaterialPageRoute(
+                                builder: (context) => RefundManagementPage(),
+                              ),
                             );
                           },
                         ),
@@ -769,7 +860,9 @@ class _StoreLayoutState extends State<StoreLayout> {
                             Navigator.pop(context);
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (context) => SupportAgentHome()),
+                              MaterialPageRoute(
+                                builder: (context) => SupportAgentHome(),
+                              ),
                             );
                           },
                         ),
@@ -780,7 +873,9 @@ class _StoreLayoutState extends State<StoreLayout> {
                             Navigator.pop(context);
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (context) => ChatQueuePage()),
+                              MaterialPageRoute(
+                                builder: (context) => ChatQueuePage(),
+                              ),
                             );
                           },
                         ),
@@ -793,10 +888,12 @@ class _StoreLayoutState extends State<StoreLayout> {
                             Navigator.pop(context);
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (context) => CustomerHome(
-                                username: userName,
-                                role: userRole,
-                              )),
+                              MaterialPageRoute(
+                                builder: (context) => CustomerHome(
+                                  username: userName,
+                                  role: userRole,
+                                ),
+                              ),
                             );
                           },
                         ),
@@ -808,7 +905,9 @@ class _StoreLayoutState extends State<StoreLayout> {
                           Navigator.pop(context);
                           await authService.logout();
                           Navigator.of(context).pushAndRemoveUntil(
-                            MaterialPageRoute(builder: (context) => HomeScreen()),
+                            MaterialPageRoute(
+                              builder: (context) => HomeScreen(),
+                            ),
                             (route) => false,
                           );
                         },
@@ -821,7 +920,9 @@ class _StoreLayoutState extends State<StoreLayout> {
                           Navigator.pop(context);
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => LoginScreen()),
+                            MaterialPageRoute(
+                              builder: (context) => LoginScreen(),
+                            ),
                           );
                         },
                       ),
@@ -832,7 +933,9 @@ class _StoreLayoutState extends State<StoreLayout> {
                           Navigator.pop(context);
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => SignupScreen()),
+                            MaterialPageRoute(
+                              builder: (context) => SignupScreen(),
+                            ),
                           );
                         },
                       ),
@@ -860,11 +963,7 @@ class _StoreLayoutState extends State<StoreLayout> {
           color: Color(0xFFFF7733).withOpacity(0.1),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(
-          icon,
-          color: Color(0xFFFF7733),
-          size: 24,
-        ),
+        child: Icon(icon, color: Color(0xFFFF7733), size: 24),
       ),
       title: Text(
         title,
@@ -890,14 +989,9 @@ class _StoreLayoutState extends State<StoreLayout> {
                 ),
               ),
             )
-          : Icon(
-              Icons.chevron_right_rounded,
-              color: Colors.grey[400],
-            ),
+          : Icon(Icons.chevron_right_rounded, color: Colors.grey[400]),
       onTap: onTap,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     );
   }
 
@@ -931,12 +1025,27 @@ class _StoreLayoutState extends State<StoreLayout> {
         children: [
           Row(
             children: [
-              // Navigation Icon
+              // Back Button (if can pop)
+              if (Navigator.canPop(context)) ...[
+                IconButton(
+                  icon: const Icon(
+                    Icons.arrow_back_rounded,
+                    size: 28,
+                    color: Color(0xFF1E3A8A),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  tooltip: 'Back',
+                ),
+                const SizedBox(width: 4),
+              ],
+              // Navigation Icon (Menu)
               IconButton(
                 icon: const Icon(
                   Icons.menu_rounded,
                   size: 28,
-                  color: Color(0xFFFF7733),
+                  color: Color(0xFF1E3A8A),
                 ),
                 onPressed: () {
                   _scaffoldKey.currentState?.openDrawer();
@@ -954,10 +1063,16 @@ class _StoreLayoutState extends State<StoreLayout> {
                       (route) => false,
                     );
                   },
-                  child: Image.network(
-                    'https://storage.googleapis.com/cs308db.firebasestorage.app/allishere-logo.jpeg',
-                    height: 55,
-                    fit: BoxFit.contain,
+                  child: Container(
+                    color: Colors.transparent,
+                    child: Image.network(
+                      'https://storage.googleapis.com/cs308db.firebasestorage.app/logos/all-is-here-transparent-removebg-preview.png',
+                      height: 75,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(Icons.image, size: 75);
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -981,9 +1096,14 @@ class _StoreLayoutState extends State<StoreLayout> {
                     if (userRole != null && userRole != 'customer') ...[
                       SizedBox(height: 2),
                       Text(
-                        userRole.replaceAll('_', ' ').split(' ').map((word) => 
-                          word[0].toUpperCase() + word.substring(1)
-                        ).join(' '),
+                        userRole
+                            .replaceAll('_', ' ')
+                            .split(' ')
+                            .map(
+                              (word) =>
+                                  word[0].toUpperCase() + word.substring(1),
+                            )
+                            .join(' '),
                         style: TextStyle(
                           color: Colors.grey.shade600,
                           fontSize: 11,
@@ -993,8 +1113,8 @@ class _StoreLayoutState extends State<StoreLayout> {
                     ],
                   ],
                 ),
-              SizedBox(width: 16),
-            ],
+                SizedBox(width: 16),
+              ],
 
               // 1.5 Notification Bell (11.3)
               if (isLoggedIn) ...[
@@ -1002,7 +1122,7 @@ class _StoreLayoutState extends State<StoreLayout> {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.notifications, size: 28),
-                      color: const Color(0xFFFF7733),
+                      color: const Color(0xFF1E3A8A),
                       onPressed: () => _showNotificationsDialog(context),
                     ),
                     if (_unreadNotificationCount > 0)
@@ -1040,7 +1160,7 @@ class _StoreLayoutState extends State<StoreLayout> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.shopping_cart, size: 28),
-                    color: const Color(0xFFFF7733),
+                    color: const Color(0xFF1E3A8A),
                     onPressed: () {
                       Navigator.push(
                         context,
@@ -1089,10 +1209,10 @@ class _StoreLayoutState extends State<StoreLayout> {
                     // Refresh header after returning from login
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2196F3),
+                    backgroundColor: const Color(0xFF1E3A8A),
                     foregroundColor: Colors.white,
                     elevation: 3,
-                    shadowColor: const Color(0xFF2196F3).withOpacity(0.4),
+                    shadowColor: const Color(0xFF1E3A8A).withOpacity(0.4),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -1106,8 +1226,11 @@ class _StoreLayoutState extends State<StoreLayout> {
                     MaterialPageRoute(builder: (context) => SignupScreen()),
                   ),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF2196F3),
-                    side: const BorderSide(color: Color(0xFF2196F3), width: 1.5),
+                    foregroundColor: const Color(0xFF1E3A8A),
+                    side: const BorderSide(
+                      color: Color(0xFF1E3A8A),
+                      width: 1.5,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -1122,14 +1245,14 @@ class _StoreLayoutState extends State<StoreLayout> {
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          const Color(0xFFFF7733),
-                          const Color(0xFFFFA366),
+                          const Color(0xFF1E3A8A),
+                          const Color(0xFF3B82F6),
                         ],
                       ),
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFFFF7733).withOpacity(0.3),
+                          color: const Color(0xFF1E3A8A).withOpacity(0.3),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
@@ -1215,9 +1338,7 @@ class _StoreLayoutState extends State<StoreLayout> {
                     } else if (value == 'wishlist') {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (context) => WishlistPage(),
-                        ),
+                        MaterialPageRoute(builder: (context) => WishlistPage()),
                       );
                     } else if (value == 'logout') {
                       await AuthService()
@@ -1244,11 +1365,7 @@ class _StoreLayoutState extends State<StoreLayout> {
                         value: 'wishlist',
                         child: Row(
                           children: [
-                            Icon(
-                              Icons.favorite,
-                              size: 18,
-                              color: Colors.red,
-                            ),
+                            Icon(Icons.favorite, size: 18, color: Colors.red),
                             SizedBox(width: 8),
                             Text('My Wishlist'),
                           ],
@@ -1278,7 +1395,7 @@ class _StoreLayoutState extends State<StoreLayout> {
                               Icon(
                                 Icons.local_shipping,
                                 size: 18,
-                                color: Colors.blue,
+                                color: Color(0xFF1E3A8A),
                               ),
                               SizedBox(width: 8),
                               Text('Delivery Queue'),
@@ -1407,16 +1524,21 @@ class _StoreLayoutState extends State<StoreLayout> {
       'Home Appliances',
       'Sports',
     ];
-    
+
     // Add dynamic categories that aren't already in default list
     final Set<String> allLabelsSet = {...defaultLabels};
     for (final cat in _dynamicCategories) {
-      if (!allLabelsSet.contains(cat)) {
-        allLabelsSet.add(cat);
+      // Normalize category names (e.g., "pet food" -> "Pet Food")
+      String normalizedCat = cat;
+      if (cat.toLowerCase() == 'pet food') {
+        normalizedCat = 'Pet Food';
+      }
+      if (!allLabelsSet.contains(normalizedCat)) {
+        allLabelsSet.add(normalizedCat);
       }
     }
     final labels = allLabelsSet.toList();
-    
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1432,93 +1554,138 @@ class _StoreLayoutState extends State<StoreLayout> {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1100),
-          child: Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 8,
-            runSpacing: 8,
-            children: labels.map((label) {
-              final isSelected = widget.selectedCategory == label;
-              final isHovered = _hoveredCategories.contains(label);
-              return MouseRegion(
-                cursor: SystemMouseCursors.click,
-                onEnter: (_) {
-                  setState(() {
-                    _hoveredCategories.add(label);
-                  });
-                },
-                onExit: (_) {
-                  setState(() {
-                    _hoveredCategories.remove(label);
-                  });
-                },
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () {
-                      if (widget.onCategorySelected != null) {
-                        _searchController.clear();
-                        widget.onCategorySelected!(label);
-                      } else {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                HomeScreen(initialCategory: label),
-                          ),
-                        );
-                      }
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Collapse/Expand Button
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  TextButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _categoriesExpanded = !_categoriesExpanded;
+                      });
                     },
-                    borderRadius: BorderRadius.circular(24),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeInOut,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isHovered || isSelected ? 26 : 20,
-                        vertical: isHovered || isSelected ? 12 : 8,
-                      ),
-                      decoration: BoxDecoration(
-                        gradient: (isSelected || isHovered)
-                            ? LinearGradient(
-                                colors: [
-                                  const Color(0xFFFF7733),
-                                  const Color(0xFFFFA366),
-                                ],
-                              )
-                            : null,
-                        color: (isSelected || isHovered) ? null : Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(
-                          color: const Color(0xFFFF7733),
-                          width: (isSelected || isHovered) ? 0 : 1.5,
-                        ),
-                        boxShadow: (isSelected || isHovered)
-                            ? [
-                                BoxShadow(
-                                  color: const Color(0xFFFF7733).withOpacity(
-                                    isHovered ? 0.5 : 0.3,
-                                  ),
-                                  blurRadius: isHovered ? 15 : 8,
-                                  offset: Offset(0, isHovered ? 8 : 4),
-                                  spreadRadius: isHovered ? 3 : 0,
-                                ),
-                              ]
-                            : null,
-                      ),
-                      child: Text(
-                        label,
-                        style: TextStyle(
-                          color: (isSelected || isHovered)
-                              ? Colors.white
-                              : const Color(0xFFFF7733),
-                          fontWeight: FontWeight.w600,
-                          fontSize: isHovered || isSelected ? 15 : 13,
-                        ),
+                    icon: Icon(
+                      _categoriesExpanded
+                          ? Icons.expand_less
+                          : Icons.expand_more,
+                      color: const Color(0xFF1E3A8A),
+                    ),
+                    label: Text(
+                      _categoriesExpanded
+                          ? 'Hide Categories'
+                          : 'Show Categories',
+                      style: TextStyle(
+                        color: const Color(0xFF1E3A8A),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
                       ),
                     ),
                   ),
+                ],
+              ),
+              // Categories with animation
+              AnimatedCrossFade(
+                firstChild: Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: labels.map((label) {
+                    return _buildCategoryChip(label);
+                  }).toList(),
+                ),
+                secondChild: SizedBox.shrink(),
+                crossFadeState: _categoriesExpanded
+                    ? CrossFadeState.showFirst
+                    : CrossFadeState.showSecond,
+                duration: const Duration(milliseconds: 300),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryChip(String label) {
+    final isSelected = widget.selectedCategory == label;
+    final isHovered = _hoveredCategories.contains(label);
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) {
+        setState(() {
+          _hoveredCategories.add(label);
+        });
+      },
+      onExit: (_) {
+        setState(() {
+          _hoveredCategories.remove(label);
+        });
+      },
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            if (widget.onCategorySelected != null) {
+              _searchController.clear();
+              widget.onCategorySelected!(label);
+            } else {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => HomeScreen(initialCategory: label),
                 ),
               );
-            }).toList(),
+            }
+          },
+          borderRadius: BorderRadius.circular(24),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            padding: EdgeInsets.symmetric(
+              horizontal: isHovered || isSelected ? 26 : 20,
+              vertical: isHovered || isSelected ? 12 : 8,
+            ),
+            decoration: BoxDecoration(
+              gradient: (isSelected || isHovered)
+                  ? LinearGradient(
+                      colors: [
+                        const Color(0xFF1E3A8A),
+                        const Color(0xFF3B82F6),
+                      ],
+                    )
+                  : null,
+              color: (isSelected || isHovered) ? null : Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: const Color(0xFFFF7733),
+                width: (isSelected || isHovered) ? 0 : 1.5,
+              ),
+              boxShadow: (isSelected || isHovered)
+                  ? [
+                      BoxShadow(
+                        color: const Color(
+                          0xFFFF7733,
+                        ).withOpacity(isHovered ? 0.5 : 0.3),
+                        blurRadius: isHovered ? 15 : 8,
+                        offset: Offset(0, isHovered ? 8 : 4),
+                        spreadRadius: isHovered ? 3 : 0,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: (isSelected || isHovered)
+                    ? Colors.white
+                    : const Color(0xFFFF7733),
+                fontWeight: FontWeight.w600,
+                fontSize: isHovered || isSelected ? 15 : 13,
+              ),
+            ),
           ),
         ),
       ),
@@ -1547,13 +1714,13 @@ class _StoreLayoutState extends State<StoreLayout> {
                             offset: const Offset(0, 6),
                           ),
                           BoxShadow(
-                            color: const Color(0xFFFF7733).withOpacity(0.05),
+                            color: const Color(0xFF1E3A8A).withOpacity(0.05),
                             blurRadius: 30,
                             offset: const Offset(0, 10),
                           ),
                         ],
                         border: Border.all(
-                          color: const Color(0xFFFF7733).withOpacity(0.2),
+                          color: const Color(0xFF1E3A8A).withOpacity(0.2),
                           width: 1,
                         ),
                       ),
@@ -1597,14 +1764,14 @@ class _StoreLayoutState extends State<StoreLayout> {
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          const Color(0xFFFF7733),
-                          const Color(0xFFFFA366),
+                          const Color(0xFF1E3A8A),
+                          const Color(0xFF3B82F6),
                         ],
                       ),
                       borderRadius: BorderRadius.circular(26),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFFFF7733).withOpacity(0.4),
+                          color: const Color(0xFF1E3A8A).withOpacity(0.4),
                           blurRadius: 15,
                           offset: const Offset(0, 6),
                         ),
@@ -1820,7 +1987,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentPage = 1;
   int _itemsPerPage = 18;
   final List<int> _itemsPerPageOptions = [9, 18, 24, 48, 72];
-  
+
   // Default category mappings (will be extended with dynamic categories)
   final Map<String, int> _defaultCategoryIds = {
     'Electronics': 1,
@@ -2000,20 +2167,24 @@ class _HomeScreenState extends State<HomeScreen> {
       _filteredProducts = _filterProducts();
     });
   }
-  
+
   Future<bool?> _getWishlistStatus(Map<String, dynamic> product) async {
     if (!AuthService().isLoggedIn) return null;
     try {
       String? uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) {
         final currentUser = AuthService().currentUser;
-        uid = currentUser?['id']?.toString() ?? currentUser?['user_id']?.toString();
+        uid =
+            currentUser?['id']?.toString() ??
+            currentUser?['user_id']?.toString();
       }
       if (uid == null) return null;
       final apiService = ApiService();
       final wishlist = await apiService.getWishlist(uid);
       final productId = (product['id'] ?? product['product_id']).toString();
-      return wishlist.any((p) => (p['id'] ?? p['product_id']).toString() == productId);
+      return wishlist.any(
+        (p) => (p['id'] ?? p['product_id']).toString() == productId,
+      );
     } catch (e) {
       print("Error checking wishlist status: $e");
       return null;
@@ -2232,13 +2403,18 @@ class _HomeScreenState extends State<HomeScreen> {
             String? uid = FirebaseAuth.instance.currentUser?.uid;
             if (uid == null) {
               final currentUser = AuthService().currentUser;
-              uid = currentUser?['id']?.toString() ?? currentUser?['user_id']?.toString();
+              uid =
+                  currentUser?['id']?.toString() ??
+                  currentUser?['user_id']?.toString();
             }
             if (uid != null) {
               final apiService = ApiService();
               final wishlist = await apiService.getWishlist(uid);
-              final productId = (product['id'] ?? product['product_id']).toString();
-              wishlistStatus = wishlist.any((p) => (p['id'] ?? p['product_id']).toString() == productId);
+              final productId = (product['id'] ?? product['product_id'])
+                  .toString();
+              wishlistStatus = wishlist.any(
+                (p) => (p['id'] ?? p['product_id']).toString() == productId,
+              );
             }
           } catch (e) {
             print("Error checking wishlist before navigation: $e");
@@ -2293,15 +2469,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     : null,
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: _currentPage > 1
-                        ? Color(0xFFFF7733).withOpacity(0.1)
+                        ? Color(0xFF1E3A8A).withOpacity(0.1)
                         : Colors.grey[100],
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: _currentPage > 1
-                          ? Color(0xFFFF7733).withOpacity(0.3)
+                          ? Color(0xFF1E3A8A).withOpacity(0.3)
                           : Colors.grey[300]!,
                       width: 1.5,
                     ),
@@ -2312,7 +2491,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       Icon(
                         Icons.chevron_left_rounded,
                         color: _currentPage > 1
-                            ? Color(0xFFFF7733)
+                            ? Color(0xFF1E3A8A)
                             : Colors.grey[400],
                         size: 24,
                       ),
@@ -2323,7 +2502,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: _currentPage > 1
-                              ? Color(0xFFFF7733)
+                              ? Color(0xFF1E3A8A)
                               : Colors.grey[400],
                         ),
                       ),
@@ -2333,21 +2512,18 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const SizedBox(width: 20),
-            
+
             // Page Info
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [
-                    Color(0xFFFF7733),
-                    Color(0xFFFFA366),
-                  ],
+                  colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
                 ),
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: Color(0xFFFF7733).withOpacity(0.3),
+                    color: Color(0xFF1E3A8A).withOpacity(0.3),
                     blurRadius: 8,
                     offset: Offset(0, 4),
                   ),
@@ -2366,7 +2542,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(8),
@@ -2376,7 +2555,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFFFF7733),
+                        color: Color(0xFF1E3A8A),
                       ),
                     ),
                   ),
@@ -2391,7 +2570,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.3),
                       borderRadius: BorderRadius.circular(8),
@@ -2409,7 +2591,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const SizedBox(width: 20),
-            
+
             // Next Button
             Material(
               color: Colors.transparent,
@@ -2419,15 +2601,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     : null,
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: _currentPage < totalPages
-                        ? Color(0xFFFF7733).withOpacity(0.1)
+                        ? Color(0xFF1E3A8A).withOpacity(0.1)
                         : Colors.grey[100],
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: _currentPage < totalPages
-                          ? Color(0xFFFF7733).withOpacity(0.3)
+                          ? Color(0xFF1E3A8A).withOpacity(0.3)
                           : Colors.grey[300]!,
                       width: 1.5,
                     ),
@@ -2441,7 +2626,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: _currentPage < totalPages
-                              ? Color(0xFFFF7733)
+                              ? Color(0xFF1E3A8A)
                               : Colors.grey[400],
                         ),
                       ),
@@ -2449,7 +2634,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       Icon(
                         Icons.chevron_right_rounded,
                         color: _currentPage < totalPages
-                            ? Color(0xFFFF7733)
+                            ? Color(0xFF1E3A8A)
                             : Colors.grey[400],
                         size: 24,
                       ),
@@ -2470,7 +2655,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final imageUrl = getProductImageUrl(featuredProduct);
     final price = featuredProduct['price'] ?? 0;
     final rating = featuredProduct['average_rating'] ?? 0.0;
-    
+
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
@@ -2495,15 +2680,15 @@ class _HomeScreenState extends State<HomeScreen> {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                const Color(0xFFFF7733),
-                const Color(0xFFFFA366),
-                const Color(0xFFFF5500),
+                const Color(0xFF1E3A8A),
+                const Color(0xFF3B82F6),
+                const Color(0xFF2563EB),
               ],
             ),
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFFF7733).withOpacity(0.4),
+                color: const Color(0xFF1E3A8A).withOpacity(0.4),
                 blurRadius: 30,
                 offset: const Offset(0, 15),
                 spreadRadius: 5,
@@ -2555,7 +2740,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               vertical: 8,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: Color(0xFFFF7733),
                               borderRadius: BorderRadius.circular(20),
                               boxShadow: [
                                 BoxShadow(
@@ -2570,7 +2755,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFFFF7733),
+                                color: Colors.white,
                                 letterSpacing: 2,
                               ),
                             ),
@@ -2683,7 +2868,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: InkWell(
                                 onTap: () async {
                                   _handleSearch("");
-                                  final wishlistStatus = await _getWishlistStatus(featuredProduct);
+                                  final wishlistStatus =
+                                      await _getWishlistStatus(featuredProduct);
                                   if (!mounted) return;
                                   Navigator.push(
                                     context,
@@ -2752,21 +2938,23 @@ class _HomeScreenState extends State<HomeScreen> {
                                   fit: BoxFit.cover,
                                   loadingBuilder:
                                       (context, child, loadingProgress) {
-                                    if (loadingProgress == null) return child;
-                                    return Center(
-                                      child: CircularProgressIndicator(
-                                        color: const Color(0xFFFF7733),
-                                        value: loadingProgress
-                                                    .expectedTotalBytes !=
-                                                null
-                                            ? loadingProgress
-                                                    .cumulativeBytesLoaded /
+                                        if (loadingProgress == null)
+                                          return child;
+                                        return Center(
+                                          child: CircularProgressIndicator(
+                                            color: const Color(0xFFFF7733),
+                                            value:
                                                 loadingProgress
-                                                    .expectedTotalBytes!
-                                            : null,
-                                      ),
-                                    );
-                                  },
+                                                        .expectedTotalBytes !=
+                                                    null
+                                                ? loadingProgress
+                                                          .cumulativeBytesLoaded /
+                                                      loadingProgress
+                                                          .expectedTotalBytes!
+                                                : null,
+                                          ),
+                                        );
+                                      },
                                   errorBuilder: (context, error, stackTrace) {
                                     return Container(
                                       color: Colors.grey[100],
@@ -2817,7 +3005,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ElevatedButton(
             onPressed: _loadProducts,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2196F3),
+              backgroundColor: const Color(0xFF1E3A8A),
             ),
             child: const Text('Retry'),
           ),
@@ -2830,9 +3018,9 @@ class _HomeScreenState extends State<HomeScreen> {
 // Wishlist Heart Button Widget
 class _WishlistHeartButton extends StatefulWidget {
   final Map<String, dynamic> product;
-  
+
   const _WishlistHeartButton({required this.product});
-  
+
   @override
   _WishlistHeartButtonState createState() => _WishlistHeartButtonState();
 }
@@ -2841,44 +3029,49 @@ class _WishlistHeartButtonState extends State<_WishlistHeartButton> {
   final ApiService _apiService = ApiService();
   bool _isInWishlist = false;
   bool _loading = false;
-  
+
   @override
   void initState() {
     super.initState();
     _checkWishlistStatus();
   }
-  
+
   Future<void> _checkWishlistStatus() async {
     if (!AuthService().isLoggedIn) return;
-    
+
     String? uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
       final currentUser = AuthService().currentUser;
-      uid = currentUser?['id']?.toString() ?? currentUser?['user_id']?.toString();
+      uid =
+          currentUser?['id']?.toString() ?? currentUser?['user_id']?.toString();
     }
-    
+
     if (uid == null) return;
-    
+
     try {
       final wishlist = await _apiService.getWishlist(uid);
-      final productId = (widget.product['id'] ?? widget.product['product_id']).toString();
+      final productId = (widget.product['id'] ?? widget.product['product_id'])
+          .toString();
       setState(() {
-        _isInWishlist = wishlist.any((p) => (p['id'] ?? p['product_id']).toString() == productId);
+        _isInWishlist = wishlist.any(
+          (p) => (p['id'] ?? p['product_id']).toString() == productId,
+        );
       });
     } catch (e) {
       print("Error checking wishlist: $e");
     }
   }
-  
+
   Future<void> _toggleWishlist() async {
     if (_loading) return;
-    
+
     if (!AuthService().isLoggedIn) {
       // Navigate to login with product to add to wishlist
       final result = await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => LoginScreen(productToAddToWishlist: widget.product),
+          builder: (context) =>
+              LoginScreen(productToAddToWishlist: widget.product),
         ),
       );
       // Refresh wishlist status after returning from login
@@ -2887,22 +3080,24 @@ class _WishlistHeartButtonState extends State<_WishlistHeartButton> {
       }
       return;
     }
-    
+
     setState(() => _loading = true);
-    
+
     String? uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
       final currentUser = AuthService().currentUser;
-      uid = currentUser?['id']?.toString() ?? currentUser?['user_id']?.toString();
+      uid =
+          currentUser?['id']?.toString() ?? currentUser?['user_id']?.toString();
     }
-    
+
     if (uid == null) {
       setState(() => _loading = false);
       return;
     }
-    
-    final productId = (widget.product['id'] ?? widget.product['product_id']).toString();
-    
+
+    final productId = (widget.product['id'] ?? widget.product['product_id'])
+        .toString();
+
     try {
       if (_isInWishlist) {
         final success = await _apiService.removeFromWishlist(uid, productId);
@@ -2930,7 +3125,7 @@ class _WishlistHeartButtonState extends State<_WishlistHeartButton> {
       print("Error toggling wishlist: $e");
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -3021,7 +3216,7 @@ class ProductCardWidgetState extends State<ProductCardWidget> {
               boxShadow: _isHovered
                   ? [
                       BoxShadow(
-                        color: const Color(0xFFFF7733).withOpacity(0.15),
+                        color: const Color(0xFF1E3A8A).withOpacity(0.15),
                         blurRadius: 30,
                         offset: const Offset(0, 15),
                         spreadRadius: 2,
@@ -3039,58 +3234,58 @@ class ProductCardWidgetState extends State<ProductCardWidget> {
                         offset: const Offset(0, 5),
                       ),
                       BoxShadow(
-                        color: const Color(0xFFFF7733).withOpacity(0.05),
+                        color: const Color(0xFF1E3A8A).withOpacity(0.05),
                         blurRadius: 25,
                         offset: const Offset(0, 10),
                       ),
                     ],
             ),
-            transform: Matrix4.identity()
-              ..scale(_isHovered ? 1.03 : 1.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Image Section - Larger and more prominent
-                    Expanded(
-                      flex: 4,
-                      child: Container(
-                        margin: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              const Color(0xFFFFF8F0),
-                              Colors.white,
-                              const Color(0xFFFFF5E6),
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.04),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
+            transform: Matrix4.identity()..scale(_isHovered ? 1.03 : 1.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Image Section - Larger and more prominent
+                Expanded(
+                  flex: 4,
+                  child: Container(
+                    margin: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          const Color(0xFFFFF8F0),
+                          Colors.white,
+                          const Color(0xFFFFF5E6),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
                         ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              widget.imageUrl != null
-                                  ? Image.network(
-                                      widget.imageUrl!,
-                                      fit: BoxFit.contain,
-                                      loadingBuilder:
-                                          (context, child, loadingProgress) {
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          widget.imageUrl != null
+                              ? Image.network(
+                                  widget.imageUrl!,
+                                  fit: BoxFit.contain,
+                                  loadingBuilder:
+                                      (context, child, loadingProgress) {
                                         if (loadingProgress == null)
                                           return child;
                                         return Center(
                                           child: CircularProgressIndicator(
                                             color: const Color(0xFFFF7733),
-                                            value: loadingProgress
+                                            value:
+                                                loadingProgress
                                                         .expectedTotalBytes !=
                                                     null
                                                 ? loadingProgress
@@ -3101,26 +3296,8 @@ class ProductCardWidgetState extends State<ProductCardWidget> {
                                           ),
                                         );
                                       },
-                                      errorBuilder:
-                                          (context, error, stackTrace) {
-                                        return Container(
-                                          decoration: BoxDecoration(
-                                            gradient: LinearGradient(
-                                              colors: [
-                                                Colors.grey[100]!,
-                                                Colors.grey[50]!,
-                                              ],
-                                            ),
-                                          ),
-                                          child: Icon(
-                                            Icons.shopping_bag_outlined,
-                                            size: 100,
-                                            color: Colors.grey[400],
-                                          ),
-                                        );
-                                      },
-                                    )
-                                  : Container(
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
                                       decoration: BoxDecoration(
                                         gradient: LinearGradient(
                                           colors: [
@@ -3134,275 +3311,308 @@ class ProductCardWidgetState extends State<ProductCardWidget> {
                                         size: 100,
                                         color: Colors.grey[400],
                                       ),
-                                    ),
-                              // Rating badge on top left
-                              if (widget.rating > 0)
-                                Positioned(
-                                  top: 12,
-                                  left: 12,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: [
-                                          Colors.amber[600]!,
-                                          Colors.amber[400]!,
-                                        ],
-                                      ),
-                                      borderRadius: BorderRadius.circular(20),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.amber.withOpacity(0.4),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(
-                                          Icons.star,
-                                          size: 16,
-                                          color: Colors.white,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          widget.rating.toStringAsFixed(1),
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 13,
-                                          ),
-                                        ),
+                                    );
+                                  },
+                                )
+                              : Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        Colors.grey[100]!,
+                                        Colors.grey[50]!,
                                       ],
                                     ),
                                   ),
+                                  child: Icon(
+                                    Icons.shopping_bag_outlined,
+                                    size: 100,
+                                    color: Colors.grey[400],
+                                  ),
                                 ),
-                              // Wishlist heart icon (always visible)
-                              Positioned(
-                                top: 12,
-                                right: 12,
-                                child: _WishlistHeartButton(product: widget.product),
-                              ),
-                              // Out of Stock badge
-                              if (widget.isOutOfStock)
-                                Positioned(
-                                  bottom: 12,
-                                  right: 12,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 6,
+                          // Rating badge on top left
+                          if (widget.rating > 0)
+                            Positioned(
+                              top: 12,
+                              left: 12,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.amber[600]!,
+                                      Colors.amber[400]!,
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.amber.withOpacity(0.4),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
                                     ),
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: [
-                                          Colors.red[600]!,
-                                          Colors.red[400]!,
-                                        ],
-                                      ),
-                                      borderRadius: BorderRadius.circular(20),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.red.withOpacity(0.4),
-                                          blurRadius: 10,
-                                          offset: const Offset(0, 3),
-                                        ),
-                                      ],
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.star,
+                                      size: 16,
+                                      color: Colors.white,
                                     ),
-                                    child: const Text(
-                                      'Out of Stock',
-                                      style: TextStyle(
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      widget.rating.toStringAsFixed(1),
+                                      style: const TextStyle(
                                         color: Colors.white,
                                         fontWeight: FontWeight.bold,
-                                        fontSize: 11,
+                                        fontSize: 13,
                                       ),
                                     ),
-                                  ),
+                                  ],
                                 ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    // Content Section
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Category badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  const Color(0xFFFF7733).withOpacity(0.15),
-                                  const Color(0xFFFFA366).withOpacity(0.15),
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: const Color(0xFFFF7733).withOpacity(0.4),
-                                width: 1.5,
                               ),
                             ),
-                            child: Text(
-                              getCategoryNames(widget.product),
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFFFF7733),
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.5,
-                              ),
+                          // Wishlist heart icon (always visible)
+                          Positioned(
+                            top: 12,
+                            right: 12,
+                            child: _WishlistHeartButton(
+                              product: widget.product,
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          // Product ID
-                          Text(
-                            'ID: ${widget.product['product_id'] ?? widget.product['id'] ?? 'N/A'}',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.grey[600],
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Product Name - Larger and bolder
-                          Text(
-                            widget.product['name'] ?? 'Product',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: _isHovered ? 17 : 16,
-                              height: 1.3,
-                              color: Colors.grey[900],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Price - Large and prominent
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '${widget.price} ₺',
-                                    style: TextStyle(
-                                      fontSize: _isHovered ? 24 : 22,
-                                      fontWeight: FontWeight.bold,
-                                      color: const Color(0xFFFF7733),
-                                      height: 1,
-                                    ),
+                          // Out of Stock badge
+                          if (widget.isOutOfStock)
+                            Positioned(
+                              bottom: 12,
+                              right: 12,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.red[600]!,
+                                      Colors.red[400]!,
+                                    ],
                                   ),
-                                  if (widget.stock > 0)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 4),
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            Icons.check_circle,
-                                            size: 12,
-                                            color: Colors.green[600],
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            '${widget.stock} available',
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              color: Colors.green[700],
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.red.withOpacity(0.4),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 3),
                                     ),
-                                ],
-                              ),
-                              // Add to Cart button (always visible, grayed out when disabled)
-                              Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  onTap: (!widget.isOutOfStock && widget.canAddToCart) ? widget.onAddToCart : null,
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 10,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      gradient: (!widget.isOutOfStock && widget.canAddToCart)
-                                          ? LinearGradient(
-                                              colors: [
-                                                const Color(0xFF2196F3),
-                                                const Color(0xFF64B5F6),
-                                              ],
-                                            )
-                                          : null,
-                                      color: (!widget.isOutOfStock && widget.canAddToCart)
-                                          ? null
-                                          : Colors.grey.shade300,
-                                      borderRadius: BorderRadius.circular(12),
-                                      boxShadow: (!widget.isOutOfStock && widget.canAddToCart)
-                                          ? [
-                                              BoxShadow(
-                                                color: const Color(0xFF2196F3)
-                                                    .withOpacity(0.4),
-                                                blurRadius: 8,
-                                                offset: const Offset(0, 4),
-                                              ),
-                                            ]
-                                          : null,
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.add_shopping_cart,
-                                          color: (!widget.isOutOfStock && widget.canAddToCart)
-                                              ? Colors.white
-                                              : Colors.grey.shade600,
-                                          size: 18,
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          'Add to Cart',
-                                          style: TextStyle(
-                                            color: (!widget.isOutOfStock && widget.canAddToCart)
-                                                ? Colors.white
-                                                : Colors.grey.shade600,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                                  ],
+                                ),
+                                child: const Text(
+                                  'Out of Stock',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 11,
                                   ),
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
                         ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
+                // Content Section
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Category badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              const Color(0xFF1E3A8A).withOpacity(0.15),
+                              const Color(0xFF3B82F6).withOpacity(0.15),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: const Color(0xFF1E3A8A).withOpacity(0.4),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Text(
+                          getCategoryNames(widget.product),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFFFF7733),
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Product ID
+                      Text(
+                        'ID: ${widget.product['product_id'] ?? widget.product['id'] ?? 'N/A'}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Product Name - Larger and bolder
+                      Text(
+                        widget.product['name'] ?? 'Product',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: _isHovered ? 17 : 16,
+                          height: 1.3,
+                          color: Colors.grey[900],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Price - Large and prominent
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${widget.price} ₺',
+                                style: TextStyle(
+                                  fontSize: _isHovered ? 24 : 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFFFF7733),
+                                  height: 1,
+                                ),
+                              ),
+                              if (widget.stock > 0)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.check_circle,
+                                        size: 12,
+                                        color: Colors.green[600],
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '${widget.stock} available',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: Colors.green[700],
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                          // Add to Cart button (always visible, grayed out when disabled)
+                          Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap:
+                                  (!widget.isOutOfStock && widget.canAddToCart)
+                                  ? widget.onAddToCart
+                                  : null,
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  gradient:
+                                      (!widget.isOutOfStock &&
+                                          widget.canAddToCart)
+                                      ? LinearGradient(
+                                          colors: [
+                                            const Color(0xFF1E3A8A),
+                                            const Color(0xFF3B82F6),
+                                          ],
+                                        )
+                                      : null,
+                                  color:
+                                      (!widget.isOutOfStock &&
+                                          widget.canAddToCart)
+                                      ? null
+                                      : Colors.grey.shade300,
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow:
+                                      (!widget.isOutOfStock &&
+                                          widget.canAddToCart)
+                                      ? [
+                                          BoxShadow(
+                                            color: const Color(
+                                              0xFF1E3A8A,
+                                            ).withOpacity(0.4),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ]
+                                      : null,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.add_shopping_cart,
+                                      color:
+                                          (!widget.isOutOfStock &&
+                                              widget.canAddToCart)
+                                          ? Colors.white
+                                          : Colors.grey.shade600,
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'Add to Cart',
+                                      style: TextStyle(
+                                        color:
+                                            (!widget.isOutOfStock &&
+                                                widget.canAddToCart)
+                                            ? Colors.white
+                                            : Colors.grey.shade600,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
+        ),
+      ),
     );
   }
 }
@@ -3438,15 +3648,18 @@ extension _HomeScreenStateMethods on _HomeScreenState {
                     : null,
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: _currentPage > 1
-                        ? Color(0xFFFF7733).withOpacity(0.1)
+                        ? Color(0xFF1E3A8A).withOpacity(0.1)
                         : Colors.grey[100],
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: _currentPage > 1
-                          ? Color(0xFFFF7733).withOpacity(0.3)
+                          ? Color(0xFF1E3A8A).withOpacity(0.3)
                           : Colors.grey[300]!,
                       width: 1.5,
                     ),
@@ -3457,7 +3670,7 @@ extension _HomeScreenStateMethods on _HomeScreenState {
                       Icon(
                         Icons.chevron_left_rounded,
                         color: _currentPage > 1
-                            ? Color(0xFFFF7733)
+                            ? Color(0xFF1E3A8A)
                             : Colors.grey[400],
                         size: 24,
                       ),
@@ -3468,7 +3681,7 @@ extension _HomeScreenStateMethods on _HomeScreenState {
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: _currentPage > 1
-                              ? Color(0xFFFF7733)
+                              ? Color(0xFF1E3A8A)
                               : Colors.grey[400],
                         ),
                       ),
@@ -3478,21 +3691,18 @@ extension _HomeScreenStateMethods on _HomeScreenState {
               ),
             ),
             const SizedBox(width: 20),
-            
+
             // Page Info
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [
-                    Color(0xFFFF7733),
-                    Color(0xFFFFA366),
-                  ],
+                  colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
                 ),
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: Color(0xFFFF7733).withOpacity(0.3),
+                    color: Color(0xFF1E3A8A).withOpacity(0.3),
                     blurRadius: 8,
                     offset: Offset(0, 4),
                   ),
@@ -3511,7 +3721,10 @@ extension _HomeScreenStateMethods on _HomeScreenState {
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(8),
@@ -3521,7 +3734,7 @@ extension _HomeScreenStateMethods on _HomeScreenState {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFFFF7733),
+                        color: Color(0xFF1E3A8A),
                       ),
                     ),
                   ),
@@ -3536,7 +3749,10 @@ extension _HomeScreenStateMethods on _HomeScreenState {
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.3),
                       borderRadius: BorderRadius.circular(8),
@@ -3554,7 +3770,7 @@ extension _HomeScreenStateMethods on _HomeScreenState {
               ),
             ),
             const SizedBox(width: 20),
-            
+
             // Next Button
             Material(
               color: Colors.transparent,
@@ -3564,15 +3780,18 @@ extension _HomeScreenStateMethods on _HomeScreenState {
                     : null,
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: _currentPage < totalPages
-                        ? Color(0xFFFF7733).withOpacity(0.1)
+                        ? Color(0xFF1E3A8A).withOpacity(0.1)
                         : Colors.grey[100],
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: _currentPage < totalPages
-                          ? Color(0xFFFF7733).withOpacity(0.3)
+                          ? Color(0xFF1E3A8A).withOpacity(0.3)
                           : Colors.grey[300]!,
                       width: 1.5,
                     ),
@@ -3586,7 +3805,7 @@ extension _HomeScreenStateMethods on _HomeScreenState {
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: _currentPage < totalPages
-                              ? Color(0xFFFF7733)
+                              ? Color(0xFF1E3A8A)
                               : Colors.grey[400],
                         ),
                       ),
@@ -3594,7 +3813,7 @@ extension _HomeScreenStateMethods on _HomeScreenState {
                       Icon(
                         Icons.chevron_right_rounded,
                         color: _currentPage < totalPages
-                            ? Color(0xFFFF7733)
+                            ? Color(0xFF1E3A8A)
                             : Colors.grey[400],
                         size: 24,
                       ),
@@ -3615,7 +3834,7 @@ extension _HomeScreenStateMethods on _HomeScreenState {
     final imageUrl = getProductImageUrl(featuredProduct);
     final price = featuredProduct['price'] ?? 0;
     final rating = featuredProduct['average_rating'] ?? 0.0;
-    
+
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
@@ -3640,15 +3859,15 @@ extension _HomeScreenStateMethods on _HomeScreenState {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                const Color(0xFFFF7733),
-                const Color(0xFFFFA366),
-                const Color(0xFFFF5500),
+                const Color(0xFF1E3A8A),
+                const Color(0xFF3B82F6),
+                const Color(0xFF2563EB),
               ],
             ),
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFFF7733).withOpacity(0.4),
+                color: const Color(0xFF1E3A8A).withOpacity(0.4),
                 blurRadius: 30,
                 offset: const Offset(0, 15),
                 spreadRadius: 5,
@@ -3700,7 +3919,7 @@ extension _HomeScreenStateMethods on _HomeScreenState {
                               vertical: 8,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: Color(0xFFFF7733),
                               borderRadius: BorderRadius.circular(20),
                               boxShadow: [
                                 BoxShadow(
@@ -3715,7 +3934,7 @@ extension _HomeScreenStateMethods on _HomeScreenState {
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFFFF7733),
+                                color: Colors.white,
                                 letterSpacing: 2,
                               ),
                             ),
@@ -3828,7 +4047,8 @@ extension _HomeScreenStateMethods on _HomeScreenState {
                               child: InkWell(
                                 onTap: () async {
                                   _handleSearch("");
-                                  final wishlistStatus = await _getWishlistStatus(featuredProduct);
+                                  final wishlistStatus =
+                                      await _getWishlistStatus(featuredProduct);
                                   if (!mounted) return;
                                   Navigator.push(
                                     context,
@@ -3897,21 +4117,23 @@ extension _HomeScreenStateMethods on _HomeScreenState {
                                   fit: BoxFit.cover,
                                   loadingBuilder:
                                       (context, child, loadingProgress) {
-                                    if (loadingProgress == null) return child;
-                                    return Center(
-                                      child: CircularProgressIndicator(
-                                        color: const Color(0xFFFF7733),
-                                        value: loadingProgress
-                                                    .expectedTotalBytes !=
-                                                null
-                                            ? loadingProgress
-                                                    .cumulativeBytesLoaded /
+                                        if (loadingProgress == null)
+                                          return child;
+                                        return Center(
+                                          child: CircularProgressIndicator(
+                                            color: const Color(0xFFFF7733),
+                                            value:
                                                 loadingProgress
-                                                    .expectedTotalBytes!
-                                            : null,
-                                      ),
-                                    );
-                                  },
+                                                        .expectedTotalBytes !=
+                                                    null
+                                                ? loadingProgress
+                                                          .cumulativeBytesLoaded /
+                                                      loadingProgress
+                                                          .expectedTotalBytes!
+                                                : null,
+                                          ),
+                                        );
+                                      },
                                   errorBuilder: (context, error, stackTrace) {
                                     return Container(
                                       color: Colors.grey[100],
@@ -3962,7 +4184,7 @@ extension _HomeScreenStateMethods on _HomeScreenState {
           ElevatedButton(
             onPressed: _loadProducts,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2196F3),
+              backgroundColor: const Color(0xFF1E3A8A),
             ),
             child: const Text('Retry'),
           ),

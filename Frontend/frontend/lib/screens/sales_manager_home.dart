@@ -18,7 +18,7 @@ class SalesManagerHome extends StatelessWidget {
       backgroundColor: Color(0xFFFFF5E6),
       appBar: AppBar(
         title: Text('Sales Manager Dashboard'),
-        backgroundColor: Color(0xFFFF7733),
+        backgroundColor: Color(0xFF1E3A8A),
         iconTheme: IconThemeData(color: Colors.white),
         actions: [
           IconButton(
@@ -39,7 +39,7 @@ class SalesManagerHome extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.analytics, size: 100, color: Color(0xFFFF7733)),
+              Icon(Icons.analytics, size: 100, color: Color(0xFF1E3A8A)),
               SizedBox(height: 32),
               Text(
                 'Sales Manager Portal',
@@ -54,7 +54,7 @@ class SalesManagerHome extends StatelessWidget {
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Color(0xFFFF7733),
+                  color: Color(0xFF1E3A8A),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -77,7 +77,7 @@ class SalesManagerHome extends StatelessWidget {
                 icon: Icon(Icons.trending_up),
                 label: Text('Revenue & Profit Analysis'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFFFF7733),
+                  backgroundColor: Color(0xFF1E3A8A),
                   foregroundColor: Colors.white,
                   padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                   textStyle: TextStyle(fontSize: 18),
@@ -99,7 +99,7 @@ class SalesManagerHome extends StatelessWidget {
                 icon: Icon(Icons.price_change),
                 label: Text('Price & Discount Management'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFFFF7733),
+                  backgroundColor: Color(0xFF1E3A8A),
                   foregroundColor: Colors.white,
                   padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                   textStyle: TextStyle(fontSize: 18),
@@ -121,7 +121,7 @@ class SalesManagerHome extends StatelessWidget {
                 icon: Icon(Icons.receipt_long),
                 label: Text('Invoice Management'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFFFF7733),
+                  backgroundColor: Color(0xFF1E3A8A),
                   foregroundColor: Colors.white,
                   padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                   textStyle: TextStyle(fontSize: 18),
@@ -143,7 +143,7 @@ class SalesManagerHome extends StatelessWidget {
                 icon: Icon(Icons.money_off),
                 label: Text('Manage Refunds'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFFFF7733),
+                  backgroundColor: Color(0xFF1E3A8A),
                   foregroundColor: Colors.white,
                   padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                   textStyle: TextStyle(fontSize: 18),

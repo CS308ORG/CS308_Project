@@ -39,7 +39,7 @@ class InvoicePage extends StatelessWidget {
       backgroundColor: Color(0xFFFFF5E6),
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: Color(0xFFFF7733),
+        backgroundColor: Color(0xFF1E3A8A),
         iconTheme: IconThemeData(color: Colors.white),
         title: Row(
           children: [
@@ -80,14 +80,14 @@ class InvoicePage extends StatelessWidget {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        Color(0xFFFF7733),
-                        Color(0xFFFFA366),
+                        Color(0xFF1E3A8A),
+                        Color(0xFF3B82F6),
                       ],
                     ),
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Color(0xFFFF7733).withOpacity(0.3),
+                        color: Color(0xFF1E3A8A).withOpacity(0.3),
                         blurRadius: 20,
                         offset: Offset(0, 10),
                       ),
@@ -129,7 +129,7 @@ class InvoicePage extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFFFF7733),
+                            color: Color(0xFF1E3A8A),
                           ),
                         ),
                       ),
@@ -178,19 +178,19 @@ class InvoicePage extends StatelessWidget {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        Colors.blue[50]!,
-                        Colors.blue[100]!,
+                        Color(0xFFEFF6FF),
+                        Color(0xFFDBEAFE),
                       ],
                     ),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.blue[200]!, width: 1.5),
+                    border: Border.all(color: Color(0xFFBFDBFE), width: 1.5),
                   ),
                   child: Row(
                     children: [
                       Container(
                         padding: EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: Colors.blue[600],
+                          color: Color(0xFF2563EB),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(Icons.email_rounded, color: Colors.white, size: 24),
@@ -205,7 +205,7 @@ class InvoicePage extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.blue[900],
+                                color: Color(0xFF1E3A8A),
                               ),
                             ),
                             SizedBox(height: 4),
@@ -213,7 +213,7 @@ class InvoicePage extends StatelessWidget {
                               'A PDF copy of this invoice has been sent to your email address.',
                               style: TextStyle(
                                 fontSize: 14,
-                                color: Colors.blue[800],
+                                color: Color(0xFF1E40AF),
                               ),
                             ),
                           ],
@@ -249,8 +249,8 @@ class InvoicePage extends StatelessWidget {
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
                                 colors: [
-                                  Color(0xFFFF7733),
-                                  Color(0xFFFFA366),
+                                  Color(0xFF1E3A8A),
+                                  Color(0xFF3B82F6),
                                 ],
                               ),
                               borderRadius: BorderRadius.circular(12),
@@ -267,7 +267,7 @@ class InvoicePage extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFFFF7733),
+                              color: Color(0xFF1E3A8A),
                             ),
                           ),
                         ],
@@ -308,14 +308,14 @@ class InvoicePage extends StatelessWidget {
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: [
-                              Color(0xFFFF7733),
-                              Color(0xFFFFA366),
+                              Color(0xFF1E3A8A),
+                              Color(0xFF3B82F6),
                             ],
                           ),
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: Color(0xFFFF7733).withOpacity(0.3),
+                              color: Color(0xFF1E3A8A).withOpacity(0.3),
                               blurRadius: 12,
                               offset: Offset(0, 6),
                             ),
@@ -394,14 +394,14 @@ class InvoicePage extends StatelessWidget {
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          Color(0xFFFF7733),
-                          Color(0xFFFFA366),
+                          Color(0xFF1E3A8A),
+                          Color(0xFF3B82F6),
                         ],
                       ),
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: Color(0xFFFF7733).withOpacity(0.4),
+                          color: Color(0xFF1E3A8A).withOpacity(0.4),
                           blurRadius: 15,
                           offset: Offset(0, 8),
                         ),
@@ -484,8 +484,8 @@ class InvoicePage extends StatelessWidget {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  Color(0xFFFF7733),
-                  Color(0xFFFFA366),
+                  Color(0xFF1E3A8A),
+                  Color(0xFF3B82F6),
                 ],
               ),
               borderRadius: BorderRadius.circular(10),
@@ -532,7 +532,7 @@ class InvoicePage extends StatelessWidget {
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Color(0xFFFF7733).withOpacity(0.1),
+                  color: Color(0xFF1E3A8A).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -540,7 +540,7 @@ class InvoicePage extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFFFF7733),
+                    color: Color(0xFF1E3A8A),
                   ),
                 ),
               ),
@@ -558,7 +558,7 @@ class InvoicePage extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFFFF7733),
+                  color: Color(0xFF1E3A8A),
                 ),
               ),
             ],

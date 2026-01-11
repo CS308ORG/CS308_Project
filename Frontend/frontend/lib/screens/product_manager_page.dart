@@ -180,7 +180,7 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
               Text('Order status updated to $newStatus'),
             ],
           ),
-          backgroundColor: Color(0xFFFF7733),
+          backgroundColor: Color(0xFF1E3A8A),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -266,7 +266,7 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
         iconTheme: IconThemeData(color: Color(0xFF1A1A2E)),
         actions: [
           IconButton(
-            icon: Icon(Icons.refresh_rounded, color: Color(0xFFFF7733)),
+            icon: Icon(Icons.refresh_rounded, color: Color(0xFF1E3A8A)),
             onPressed: _loadOrders,
             tooltip: 'Refresh',
           ),
@@ -297,7 +297,7 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
                           ),
                         ),
                         SizedBox(height: 12),
-                        Container(width: 40, height: 2, color: Color(0xFFFF7733)),
+                        Container(width: 40, height: 2, color: Color(0xFF1E3A8A)),
                         SizedBox(height: 24),
                         // Search Bar
                         Container(
@@ -327,7 +327,7 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Color(0xFFFF7733), width: 2),
+                                borderSide: BorderSide(color: Color(0xFF1E3A8A), width: 2),
                               ),
                               contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                             ),
@@ -392,7 +392,7 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
                           SizedBox(width: 12),
                           _buildFilterChip('Processing', 'processing', _statusCounts['processing'] ?? 0, Colors.orange, Icons.hourglass_empty_rounded),
                           SizedBox(width: 12),
-                          _buildFilterChip('In Transit', 'in-transit', _statusCounts['in-transit'] ?? 0, Colors.blue, Icons.local_shipping_rounded),
+                          _buildFilterChip('In Transit', 'in-transit', _statusCounts['in-transit'] ?? 0, Color(0xFF1E3A8A), Icons.local_shipping_rounded),
                           SizedBox(width: 12),
                           _buildFilterChip('Delivered', 'delivered', _statusCounts['delivered'] ?? 0, Colors.green, Icons.check_circle_rounded),
                         ],
@@ -405,7 +405,7 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
                           height: 400,
                           child: Center(
                             child: CircularProgressIndicator(
-                              color: Color(0xFFFF7733),
+                              color: Color(0xFF1E3A8A),
                               strokeWidth: 3,
                             ),
                           ),
@@ -430,7 +430,7 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
                                         child: Padding(
                                           padding: EdgeInsets.all(16),
                                           child: CircularProgressIndicator(
-                                            color: Color(0xFFFF7733),
+                                            color: Color(0xFF1E3A8A),
                                             strokeWidth: 2,
                                           ),
                                         ),
@@ -469,7 +469,7 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: '${_sortBy}_$_sortOrder',
-          icon: Icon(Icons.sort, color: Color(0xFFFF7733), size: 20),
+          icon: Icon(Icons.sort, color: Color(0xFF1E3A8A), size: 20),
           isDense: true,
           items: [
             DropdownMenuItem(
@@ -591,7 +591,7 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
         statusLabel = 'Processing';
         break;
       case 'in-transit':
-        statusColor = Colors.blue;
+        statusColor = Color(0xFF1E3A8A);
         statusIcon = Icons.local_shipping_rounded;
         statusLabel = 'In Transit';
         break;
@@ -633,7 +633,7 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
                       Container(
                         padding: EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(colors: [Color(0xFFFF7733), Color(0xFFFFA366)]),
+                          gradient: LinearGradient(colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)]),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(Icons.receipt_long_rounded, color: Colors.white, size: 24),
@@ -645,7 +645,7 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
                           children: [
                             Text(
                               'Order #$orderId',
-                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFFFF7733)),
+                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1E3A8A)),
                             ),
                             SizedBox(height: 4),
                             Text(
@@ -725,7 +725,7 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
                                     child: SizedBox(
                                       width: 20,
                                       height: 20,
-                                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF7733)),
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1E3A8A)),
                                     ),
                                   );
                                 },
@@ -746,8 +746,8 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
                     ),
                     Container(
                       padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(color: Color(0xFFFF7733).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                      child: Text('Qty: $quantity', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFFFF7733))),
+                      decoration: BoxDecoration(color: Color(0xFF1E3A8A).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                      child: Text('Qty: $quantity', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E3A8A))),
                     ),
                   ],
                 ),
@@ -760,7 +760,7 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('Total Amount', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.grey[700])),
-                Text('\$${totalAmount.toStringAsFixed(2)}', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFFFF7733))),
+                Text('\$${totalAmount.toStringAsFixed(2)}', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1E3A8A))),
               ],
             ),
             if (status != 'delivered') ...[
@@ -769,7 +769,7 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
                 children: [
                   if (status == 'processing')
                     Expanded(
-                      child: _buildActionButton('Ship Order', Icons.local_shipping_rounded, Colors.blue, () => _updateOrderStatus(orderId.toString(), 'in-transit')),
+                      child: _buildActionButton('Ship Order', Icons.local_shipping_rounded, Color(0xFF1E3A8A), () => _updateOrderStatus(orderId.toString(), 'in-transit')),
                     ),
                   if (status == 'processing') SizedBox(width: 12),
                   if (status == 'in-transit')
@@ -907,9 +907,9 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
             Container(
               height: 48,
               decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [Color(0xFFFF7733), Color(0xFFFFA366)]),
+                gradient: LinearGradient(colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)]),
                 borderRadius: BorderRadius.circular(12),
-                boxShadow: [BoxShadow(color: Color(0xFFFF7733).withOpacity(0.3), blurRadius: 8, offset: Offset(0, 4))],
+                boxShadow: [BoxShadow(color: Color(0xFF1E3A8A).withOpacity(0.3), blurRadius: 8, offset: Offset(0, 4))],
               ),
               child: Material(
                 color: Colors.transparent,

@@ -29,7 +29,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   // Design constants
   static const Color _primaryText = Color(0xFF1A1A2E);
   static const Color _secondaryText = Color(0xFF6B7280);
-  static const Color _accentColor = Color(0xFFFF7733);
+  static const Color _accentColor = Color(0xFF1E3A8A);
   static const Color _borderColor = Color(0xFFE5E7EB);
   static const Color _cardBackground = Colors.white;
   static const Color _pageBackground = Color(0xFFFFF5E6);

@@ -152,7 +152,7 @@ class _InvoiceManagementPageState extends State<InvoiceManagementPage> {
           'Invoice Management',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Color(0xFFFF7733),
+        backgroundColor: Color(0xFF1E3A8A),
         foregroundColor: Colors.white,
         iconTheme: IconThemeData(color: Colors.white),
         elevation: 2,
@@ -243,7 +243,7 @@ class _InvoiceManagementPageState extends State<InvoiceManagementPage> {
           // Invoices List
           Expanded(
             child: _isLoading
-                ? Center(child: CircularProgressIndicator(color: Color(0xFFFF7733)))
+                ? Center(child: CircularProgressIndicator(color: Color(0xFF1E3A8A)))
                 : _invoices.isEmpty
                     ? Center(
                         child: Column(
@@ -291,7 +291,7 @@ class _InvoiceManagementPageState extends State<InvoiceManagementPage> {
         statusColor = Colors.orange;
         break;
       case 'in-transit':
-        statusColor = Colors.blue;
+        statusColor = Color(0xFF1E3A8A);
         break;
       case 'cancelled':
         statusColor = Colors.red;
@@ -390,7 +390,7 @@ class _InvoiceManagementPageState extends State<InvoiceManagementPage> {
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFFFF7733),
+                        color: Color(0xFF1E3A8A),
                       ),
                     ),
                   ],
@@ -398,12 +398,12 @@ class _InvoiceManagementPageState extends State<InvoiceManagementPage> {
                 Row(
                   children: [
                     IconButton(
-                      icon: Icon(Icons.print, color: Color(0xFFFF7733)),
+                      icon: Icon(Icons.print, color: Color(0xFF1E3A8A)),
                       onPressed: () => _printInvoice(orderId.toString()),
                       tooltip: 'Print',
                     ),
                     IconButton(
-                      icon: Icon(Icons.download, color: Color(0xFFFF7733)),
+                      icon: Icon(Icons.download, color: Color(0xFF1E3A8A)),
                       onPressed: () => _downloadPDF(orderId.toString()),
                       tooltip: 'Download PDF',
                     ),

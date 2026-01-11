@@ -115,7 +115,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
         builder: (context, setDialogState) => AlertDialog(
           title: Row(
             children: [
-              Icon(Icons.inventory_2, color: Color(0xFFFF7733)),
+              Icon(Icons.inventory_2, color: Color(0xFF1E3A8A)),
               SizedBox(width: 8),
               Expanded(child: Text('Update Stock', overflow: TextOverflow.ellipsis)),
             ],
@@ -155,7 +155,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
                         child: Container(
                           padding: EdgeInsets.symmetric(vertical: 12),
                           decoration: BoxDecoration(
-                            color: useAbsolute ? Color(0xFFFF7733) : Colors.grey[200],
+                            color: useAbsolute ? Color(0xFF1E3A8A) : Colors.grey[200],
                             borderRadius: BorderRadius.horizontal(left: Radius.circular(8)),
                           ),
                           child: Text(
@@ -175,7 +175,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
                         child: Container(
                           padding: EdgeInsets.symmetric(vertical: 12),
                           decoration: BoxDecoration(
-                            color: !useAbsolute ? Color(0xFFFF7733) : Colors.grey[200],
+                            color: !useAbsolute ? Color(0xFF1E3A8A) : Colors.grey[200],
                             borderRadius: BorderRadius.horizontal(right: Radius.circular(8)),
                           ),
                           child: Text(
@@ -223,7 +223,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
               child: Text('Cancel'),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Color(0xFFFF7733)),
+              style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF1E3A8A)),
               onPressed: () async {
                 try {
                   if (useAbsolute) {
@@ -290,7 +290,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
         builder: (context, setDialogState) => AlertDialog(
           title: Row(
             children: [
-              Icon(Icons.add_box, color: Color(0xFFFF7733)),
+              Icon(Icons.add_box, color: Color(0xFF1E3A8A)),
               SizedBox(width: 8),
               Text('Add New Product'),
             ],
@@ -307,7 +307,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
                     padding: EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: Color(0xFFFFF5E6),
-                      border: Border.all(color: Color(0xFFFF7733), width: 2),
+                      border: Border.all(color: Color(0xFF1E3A8A), width: 2),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
@@ -317,7 +317,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFFFF7733),
+                            color: Color(0xFF1E3A8A),
                           ),
                         ),
                         SizedBox(height: 12),
@@ -371,7 +371,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
                               }
                             },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Color(0xFFFF7733),
+                              backgroundColor: Color(0xFF1E3A8A),
                               foregroundColor: Colors.white,
                             ),
                           ),
@@ -455,7 +455,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
               child: Text('Cancel'),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Color(0xFFFF7733)),
+              style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF1E3A8A)),
               onPressed: () async {
                 if (nameController.text.isEmpty || priceController.text.isEmpty || stockController.text.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -552,7 +552,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
         builder: (context, setDialogState) => AlertDialog(
           title: Row(
             children: [
-              Icon(Icons.edit_note, color: Color(0xFFFF7733)),
+              Icon(Icons.edit_note, color: Color(0xFF1E3A8A)),
               SizedBox(width: 8),
               Expanded(child: Text('Edit Product', overflow: TextOverflow.ellipsis)),
             ],
@@ -569,7 +569,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
                     padding: EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: Color(0xFFFFF5E6),
-                      border: Border.all(color: Color(0xFFFF7733), width: 2),
+                      border: Border.all(color: Color(0xFF1E3A8A), width: 2),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
@@ -579,7 +579,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFFFF7733),
+                            color: Color(0xFF1E3A8A),
                           ),
                         ),
                         SizedBox(height: 12),
@@ -630,7 +630,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
                               ),
                               SizedBox(width: 8),
                               TextButton.icon(
-                                icon: Icon(Icons.upload_file, color: Color(0xFFFF7733)),
+                                icon: Icon(Icons.upload_file, color: Color(0xFF1E3A8A)),
                                 label: Text('Change Image'),
                                 onPressed: () async {
                                   try {
@@ -679,7 +679,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
                               }
                             },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Color(0xFFFF7733),
+                              backgroundColor: Color(0xFF1E3A8A),
                               foregroundColor: Colors.white,
                             ),
                           ),
@@ -763,7 +763,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
               child: Text('Cancel'),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Color(0xFFFF7733)),
+              style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF1E3A8A)),
               onPressed: () async {
                 if (nameController.text.isEmpty || priceController.text.isEmpty || stockController.text.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -918,7 +918,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
       backgroundColor: Color(0xFFFFF5E6),
       appBar: AppBar(
         title: Text('Stock & Product Management'),
-        backgroundColor: Color(0xFFFF7733),
+        backgroundColor: Color(0xFF1E3A8A),
         iconTheme: IconThemeData(color: Colors.white),
         actions: [
           IconButton(
@@ -928,7 +928,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
         ],
       ),
       body: _loading
-          ? Center(child: CircularProgressIndicator(color: Color(0xFFFF7733)))
+          ? Center(child: CircularProgressIndicator(color: Color(0xFF1E3A8A)))
           : _error != null
               ? Center(
                   child: Column(
@@ -950,7 +950,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
                       color: Colors.white,
                       child: Row(
                         children: [
-                          _buildStatCard('Total', _totalProducts, Colors.blue, Icons.inventory_2),
+                          _buildStatCard('Total', _totalProducts, Color(0xFF1E3A8A), Icons.inventory_2),
                           SizedBox(width: 12),
                           _buildStatCard('Low Stock', _lowStockCount, Colors.orange, Icons.warning),
                           SizedBox(width: 12),
@@ -1022,7 +1022,7 @@ class _StockManagementPageState extends State<StockManagementPage> {
                       child: Row(
                         children: [
                           ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(backgroundColor: Color(0xFFFF7733)),
+                            style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF1E3A8A)),
                             onPressed: _showAddProductDialog,
                             icon: Icon(Icons.add, color: Colors.white),
                             label: Text('Add Product', style: TextStyle(color: Colors.white)),
@@ -1226,7 +1226,7 @@ class _CategoryManagementDialogState extends State<_CategoryManagementDialog> {
     return AlertDialog(
       title: Row(
         children: [
-          Icon(Icons.category, color: Color(0xFFFF7733)),
+          Icon(Icons.category, color: Color(0xFF1E3A8A)),
           SizedBox(width: 8),
           Text('Manage Categories'),
         ],
@@ -1253,7 +1253,7 @@ class _CategoryManagementDialogState extends State<_CategoryManagementDialog> {
                 _isAdding
                     ? CircularProgressIndicator(strokeWidth: 2)
                     : IconButton(
-                        icon: Icon(Icons.add_circle, color: Color(0xFFFF7733), size: 32),
+                        icon: Icon(Icons.add_circle, color: Color(0xFF1E3A8A), size: 32),
                         onPressed: () async {
                           if (_newCategoryController.text.trim().isEmpty) return;
                           
@@ -1290,7 +1290,7 @@ class _CategoryManagementDialogState extends State<_CategoryManagementDialog> {
                   : ListView.builder(
                       itemCount: _categories.length,
                       itemBuilder: (ctx, i) => ListTile(
-                        leading: Icon(Icons.folder, color: Color(0xFFFF7733)),
+                        leading: Icon(Icons.folder, color: Color(0xFF1E3A8A)),
                         title: Text(_categories[i]),
                         trailing: IconButton(
                           icon: Icon(Icons.delete, color: Colors.red),

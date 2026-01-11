@@ -61,14 +61,14 @@ class _BasketPageState extends State<BasketPage> with SingleTickerProviderStateM
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      Color(0xFFFF7733),
-                      Color(0xFFFFA366),
+                      Color(0xFF1E3A8A),
+                      Color(0xFF3B82F6),
                     ],
                   ),
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: Color(0xFFFF7733).withOpacity(0.3),
+                      color: Color(0xFF1E3A8A).withOpacity(0.3),
                       blurRadius: 20,
                       offset: Offset(0, 10),
                     ),
@@ -176,7 +176,7 @@ class _BasketPageState extends State<BasketPage> with SingleTickerProviderStateM
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFFFF7733),
+                            color: Color(0xFF1E3A8A),
                           ),
                         ),
                         Text(
@@ -184,7 +184,7 @@ class _BasketPageState extends State<BasketPage> with SingleTickerProviderStateM
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFFFF7733),
+                            color: Color(0xFF1E3A8A),
                           ),
                         ),
                       ],
@@ -204,7 +204,7 @@ class _BasketPageState extends State<BasketPage> with SingleTickerProviderStateM
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: Color(0xFFFF7733),
+                          color: Color(0xFF1E3A8A),
                           width: 2,
                         ),
                       ),
@@ -213,24 +213,32 @@ class _BasketPageState extends State<BasketPage> with SingleTickerProviderStateM
                         child: InkWell(
                           onTap: () => Navigator.pop(context),
                           borderRadius: BorderRadius.circular(16),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.arrow_back_rounded,
-                                color: Color(0xFFFF7733),
-                                size: 24,
-                              ),
-                              SizedBox(width: 8),
-                              Text(
-                                'Continue Shopping',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFFFF7733),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.arrow_back_rounded,
+                                  color: Color(0xFF1E3A8A),
+                                  size: 20,
                                 ),
-                              ),
-                            ],
+                                SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    'Continue Shopping',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF1E3A8A),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -244,14 +252,14 @@ class _BasketPageState extends State<BasketPage> with SingleTickerProviderStateM
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
-                            Color(0xFFFF7733),
-                            Color(0xFFFFA366),
+                            Color(0xFF1E3A8A),
+                            Color(0xFF3B82F6),
                           ],
                         ),
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Color(0xFFFF7733).withOpacity(0.4),
+                            color: Color(0xFF1E3A8A).withOpacity(0.4),
                             blurRadius: 15,
                             offset: Offset(0, 8),
                           ),
@@ -361,14 +369,14 @@ class _BasketPageState extends State<BasketPage> with SingleTickerProviderStateM
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    Color(0xFFFF7733),
-                    Color(0xFFFFA366),
+                    Color(0xFF1E3A8A),
+                    Color(0xFF3B82F6),
                   ],
                 ),
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Color(0xFFFF7733).withOpacity(0.4),
+                    color: Color(0xFF1E3A8A).withOpacity(0.4),
                     blurRadius: 15,
                     offset: Offset(0, 8),
                   ),
@@ -458,7 +466,7 @@ class _BasketPageState extends State<BasketPage> with SingleTickerProviderStateM
                           return Center(
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Color(0xFFFF7733),
+                              color: Color(0xFF1E3A8A),
                             ),
                           );
                         },
@@ -506,12 +514,12 @@ class _BasketPageState extends State<BasketPage> with SingleTickerProviderStateM
                       Container(
                         decoration: BoxDecoration(
                           color: quantity > 1
-                              ? Color(0xFFFF7733).withOpacity(0.1)
+                              ? Color(0xFF1E3A8A).withOpacity(0.1)
                               : Colors.grey[100],
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
                             color: quantity > 1
-                                ? Color(0xFFFF7733)
+                                ? Color(0xFF1E3A8A)
                                 : Colors.grey[300]!,
                             width: 1.5,
                           ),
@@ -533,7 +541,7 @@ class _BasketPageState extends State<BasketPage> with SingleTickerProviderStateM
                               child: Icon(
                                 Icons.remove_rounded,
                                 color: quantity > 1
-                                    ? Color(0xFFFF7733)
+                                    ? Color(0xFF1E3A8A)
                                     : Colors.grey[400],
                                 size: 20,
                               ),
@@ -581,12 +589,12 @@ class _BasketPageState extends State<BasketPage> with SingleTickerProviderStateM
                       Container(
                         decoration: BoxDecoration(
                           color: quantity < maxLimit
-                              ? Color(0xFFFF7733).withOpacity(0.1)
+                              ? Color(0xFF1E3A8A).withOpacity(0.1)
                               : Colors.grey[100],
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
                             color: quantity < maxLimit
-                                ? Color(0xFFFF7733)
+                                ? Color(0xFF1E3A8A)
                                 : Colors.grey[300]!,
                             width: 1.5,
                           ),
@@ -608,7 +616,7 @@ class _BasketPageState extends State<BasketPage> with SingleTickerProviderStateM
                               child: Icon(
                                 Icons.add_rounded,
                                 color: quantity < maxLimit
-                                    ? Color(0xFFFF7733)
+                                    ? Color(0xFF1E3A8A)
                                     : Colors.grey[400],
                                 size: 20,
                               ),
@@ -622,7 +630,7 @@ class _BasketPageState extends State<BasketPage> with SingleTickerProviderStateM
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFFFF7733),
+                          color: Color(0xFF1E3A8A),
                         ),
                       ),
                     ],

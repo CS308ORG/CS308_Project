@@ -14,7 +14,7 @@ class CustomerHome extends StatelessWidget {
       backgroundColor: Color(0xFFFFF5E6),
       appBar: AppBar(
         title: Text('Customer Dashboard'),
-        backgroundColor: Color(0xFFFF7733),
+        backgroundColor: Color(0xFF1E3A8A),
         iconTheme: IconThemeData(color: Colors.white),
         actions: [
           IconButton(
@@ -35,7 +35,7 @@ class CustomerHome extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.shopping_cart, size: 100, color: Color(0xFFFF7733)),
+              Icon(Icons.shopping_cart, size: 100, color: Color(0xFF1E3A8A)),
               SizedBox(height: 32),
               Text(
                 'Welcome, Customer!',
@@ -50,7 +50,7 @@ class CustomerHome extends StatelessWidget {
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Color(0xFFFF7733),
+                  color: Color(0xFF1E3A8A),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
