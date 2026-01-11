@@ -628,65 +628,184 @@ app.post('/checkout', async (req, res) => {
 
 app.get('/orders/delivery', authenticate, authorize(['product_manager']), async (req, res) => {
     try {
-        const snapshot = await db.collection('orders')
-            .where('status', 'in', ['processing', 'in-transit', 'delivered'])
-            .get();
+        // Parse pagination parameters (optional - for backward compatibility)
+        const page = parseInt(req.query.page) || null;
+        const pageSize = page ? Math.min(Math.max(1, parseInt(req.query.page_size) || 20), 50) : null;
+        const sortBy = req.query.sort_by || 'created_at';
+        const sortOrder = req.query.sort_order === 'asc' ? 'asc' : 'desc';
+        const statusFilter = req.query.status;
 
-        const orders = await Promise.all(snapshot.docs.map(async (doc) => {
-            const orderData = { id: doc.id, ...doc.data() };
-            
-            // Fetch customer name from users collection
-            if (orderData.user_id) {
-                try {
-                    const userDoc = await db.collection('users').doc(String(orderData.user_id)).get();
-                    if (userDoc.exists) {
-                        const userData = userDoc.data();
-                        orderData.customer_name = userData.name || userData.email || 'Unknown';
-                    } else {
-                        orderData.customer_name = 'Unknown Customer';
+        // Build base query
+        let baseQuery = db.collection('orders');
+        if (statusFilter && ['processing', 'in-transit', 'delivered'].includes(statusFilter)) {
+            baseQuery = baseQuery.where('status', '==', statusFilter);
+        } else {
+            baseQuery = baseQuery.where('status', 'in', ['processing', 'in-transit', 'delivered']);
+        }
+
+        // Get all orders
+        const snapshot = await baseQuery.get();
+        const totalCount = snapshot.size;
+        let allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // Sort orders
+        allOrders.sort((a, b) => {
+            let aVal = 0, bVal = 0;
+            if (sortBy === 'created_at') {
+                // Handle Firestore timestamp
+                if (a.created_at) {
+                    if (a.created_at._seconds) aVal = a.created_at._seconds;
+                    else if (a.created_at.seconds) aVal = a.created_at.seconds;
+                    else if (typeof a.created_at === 'number') aVal = a.created_at;
+                }
+                if (b.created_at) {
+                    if (b.created_at._seconds) bVal = b.created_at._seconds;
+                    else if (b.created_at.seconds) bVal = b.created_at.seconds;
+                    else if (typeof b.created_at === 'number') bVal = b.created_at;
+                }
+                return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+            } else {
+                // Default to status priority for backward compatibility
+                const statusPriority = {
+                    'processing': 1,
+                    'in-transit': 2,
+                    'delivered': 3
+                };
+                return (statusPriority[a.status] || 999) - (statusPriority[b.status] || 999);
+            }
+        });
+
+        // Apply pagination if requested
+        let ordersToProcess = allOrders;
+        if (page && pageSize) {
+            const offset = (page - 1) * pageSize;
+            ordersToProcess = allOrders.slice(offset, offset + pageSize);
+        }
+
+        // Batch fetch: Collect all unique user_ids
+        const userIds = [...new Set(ordersToProcess.map(o => o.user_id).filter(Boolean).map(String))];
+
+        // Batch fetch: Collect all unique product_ids
+        const productIds = [...new Set(
+            ordersToProcess.flatMap(o => (o.items || []).map(i => i.product_id).filter(Boolean).map(String))
+        )];
+
+        // Batch fetch users
+        const usersMap = {};
+        for (let i = 0; i < userIds.length; i += 10) {
+            const batch = userIds.slice(i, i + 10);
+            const userDocs = await Promise.all(
+                batch.map(uid => db.collection('users').doc(uid).get())
+            );
+            userDocs.forEach(doc => {
+                if (doc.exists) {
+                    const data = doc.data();
+                    usersMap[doc.id] = data.name || data.email || 'Unknown';
+                }
+            });
+        }
+
+        // Batch fetch products with image URLs
+        const productsMap = {};
+        for (let i = 0; i < productIds.length; i += 10) {
+            const batch = productIds.slice(i, i + 10);
+            const productDocs = await Promise.all(
+                batch.map(pid => db.collection('products').doc(pid).get())
+            );
+            productDocs.forEach(doc => {
+                if (doc.exists) {
+                    const data = doc.data();
+                    let imageUrl = data.image_url;
+                    // Convert Firebase Storage URL to proxy URL
+                    if (imageUrl && typeof imageUrl === 'string') {
+                        const urlMatch = imageUrl.match(/products[%2F\/]([^?&]+)/);
+                        if (urlMatch) {
+                            const filename = decodeURIComponent(urlMatch[1].replace(/%2F/g, '/'));
+                            imageUrl = `${req.protocol}://${req.get('host')}/images/${encodeURIComponent(filename)}`;
+                        }
                     }
-                } catch (e) {
-                    console.warn('Failed to fetch user for order:', orderData.user_id, e.message);
-                    orderData.customer_name = 'Unknown Customer';
+                    productsMap[doc.id] = {
+                        name: data.name || 'Unknown Product',
+                        image_url: imageUrl || null
+                    };
+                }
+            });
+        }
+
+        // Enrich orders with batch-fetched data
+        const enrichedOrders = ordersToProcess.map(order => {
+            // Add customer name
+            order.customer_name = usersMap[String(order.user_id)] || 'Unknown Customer';
+
+            // Convert created_at to ISO string
+            if (order.created_at) {
+                if (typeof order.created_at.toDate === 'function') {
+                    order.created_at = order.created_at.toDate().toISOString();
+                } else if (order.created_at._seconds) {
+                    order.created_at = new Date(order.created_at._seconds * 1000).toISOString();
+                } else if (order.created_at.seconds) {
+                    order.created_at = new Date(order.created_at.seconds * 1000).toISOString();
                 }
             }
 
-            // Fetch product names for each item
-            if (orderData.items && Array.isArray(orderData.items)) {
-                orderData.items = await Promise.all(orderData.items.map(async (item) => {
-                    if (item.product_id) {
-                        try {
-                            const productDoc = await db.collection('products').doc(String(item.product_id)).get();
-                            if (productDoc.exists) {
-                                item.product_name = productDoc.data().name || 'Unknown Product';
-                            } else {
-                                item.product_name = 'Product Not Found';
-                            }
-                        } catch (e) {
-                            console.warn('Failed to fetch product:', item.product_id, e.message);
-                            item.product_name = 'Unknown Product';
-                        }
-                    }
-                    return item;
-                }));
+            // Enrich items with product names and images
+            if (order.items && Array.isArray(order.items)) {
+                order.items = order.items.map(item => {
+                    const productData = productsMap[String(item.product_id)] || {};
+                    return {
+                        ...item,
+                        product_name: productData.name || 'Unknown Product',
+                        product_image_url: productData.image_url || null
+                    };
+                });
             }
-            
-            return orderData;
-        }));
 
-        orders.sort((a, b) => {
-            const statusPriority = {
-                'processing': 1,
-                'in-transit': 2,
-                'delivered': 3
-            };
-            return (statusPriority[a.status] || 999) - (statusPriority[b.status] || 999);
+            return order;
         });
 
-        return res.json({ orders });
+        // Return response with optional pagination metadata
+        if (page && pageSize) {
+            const totalPages = Math.ceil(totalCount / pageSize);
+            return res.json({
+                orders: enrichedOrders,
+                pagination: {
+                    page,
+                    page_size: pageSize,
+                    total_count: totalCount,
+                    total_pages: totalPages,
+                    has_next: page < totalPages,
+                    has_prev: page > 1
+                }
+            });
+        } else {
+            // Backward compatible response (no pagination)
+            return res.json({ orders: enrichedOrders });
+        }
     } catch (err) {
         console.error('Delivery queue error:', err);
         return res.status(500).json({ error: 'Failed to load delivery queue' });
+    }
+});
+
+// NEW: Status counts endpoint for filter chip badges
+app.get('/orders/delivery/counts', authenticate, authorize(['product_manager']), async (req, res) => {
+    try {
+        const statuses = ['processing', 'in-transit', 'delivered'];
+        const counts = {};
+
+        await Promise.all(statuses.map(async (status) => {
+            const snapshot = await db.collection('orders')
+                .where('status', '==', status)
+                .get();
+            counts[status] = snapshot.size;
+        }));
+
+        counts.all = Object.values(counts).reduce((a, b) => a + b, 0);
+
+        return res.json({ counts });
+    } catch (err) {
+        console.error('Delivery counts error:', err);
+        return res.status(500).json({ error: 'Failed to load counts' });
     }
 });
 

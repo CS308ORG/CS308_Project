@@ -2,6 +2,54 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+class DeliveryQueueResponse {
+  final List<dynamic> orders;
+  final int page;
+  final int pageSize;
+  final int totalCount;
+  final int totalPages;
+  final bool hasNext;
+  final bool hasPrev;
+
+  DeliveryQueueResponse({
+    required this.orders,
+    required this.page,
+    required this.pageSize,
+    required this.totalCount,
+    required this.totalPages,
+    required this.hasNext,
+    required this.hasPrev,
+  });
+
+  factory DeliveryQueueResponse.fromJson(Map<String, dynamic> json) {
+    final pagination = json['pagination'];
+    final orders = json['orders'] ?? [];
+
+    if (pagination != null && pagination is Map) {
+      return DeliveryQueueResponse(
+        orders: orders,
+        page: pagination['page'] ?? 1,
+        pageSize: pagination['page_size'] ?? 20,
+        totalCount: pagination['total_count'] ?? orders.length,
+        totalPages: pagination['total_pages'] ?? 1,
+        hasNext: pagination['has_next'] ?? false,
+        hasPrev: pagination['has_prev'] ?? false,
+      );
+    } else {
+      // No pagination in response
+      return DeliveryQueueResponse(
+        orders: orders,
+        page: 1,
+        pageSize: orders.length,
+        totalCount: orders.length,
+        totalPages: 1,
+        hasNext: false,
+        hasPrev: false,
+      );
+    }
+  }
+}
+
 class ProductManagerService {
   final String baseUrl = 'http://localhost:3000';
 
@@ -33,6 +81,78 @@ class ProductManagerService {
       throw Exception('Access denied - Product Manager role required');
     } else {
       throw Exception('Failed to load delivery queue');
+    }
+  }
+
+  // NEW: Paginated delivery queue method
+  Future<DeliveryQueueResponse> getDeliveryQueuePaginated({
+    int page = 1,
+    int pageSize = 20,
+    String sortBy = 'created_at',
+    String sortOrder = 'desc',
+    String? status,
+  }) async {
+    final token = await _getToken();
+    if (token == null) throw Exception('Not authenticated');
+
+    final queryParams = <String, String>{
+      'page': page.toString(),
+      'page_size': pageSize.toString(),
+      'sort_by': sortBy,
+      'sort_order': sortOrder,
+    };
+    if (status != null && status != 'all') {
+      queryParams['status'] = status;
+    }
+
+    final uri = Uri.parse('$baseUrl/orders/delivery').replace(queryParameters: queryParams);
+
+    final response = await http.get(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      return DeliveryQueueResponse.fromJson(data);
+    } else if (response.statusCode == 403) {
+      throw Exception('Access denied - Product Manager role required');
+    } else {
+      throw Exception('Failed to load delivery queue');
+    }
+  }
+
+  // NEW: Get status counts
+  Future<Map<String, int>> getDeliveryStatusCounts() async {
+    final token = await _getToken();
+    if (token == null) throw Exception('Not authenticated');
+
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/orders/delivery/counts'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final counts = data['counts'] ?? {};
+        return {
+          'all': counts['all'] ?? 0,
+          'processing': counts['processing'] ?? 0,
+          'in-transit': counts['in-transit'] ?? 0,
+          'delivered': counts['delivered'] ?? 0,
+        };
+      } else {
+        throw Exception('Failed to load counts');
+      }
+    } catch (e) {
+      rethrow;
     }
   }
 
