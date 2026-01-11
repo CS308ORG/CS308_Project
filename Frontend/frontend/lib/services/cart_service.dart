@@ -118,6 +118,8 @@ class CartService extends ChangeNotifier {
         'quantity': 1,
         'quantity_in_stock': product['quantity_in_stock'] ?? 0,
         'sku': product['serial_number'] ?? product['sku'] ?? 'SKU000',
+        'imageUrl': product['imageUrl'] ?? product['image_url'] ?? product['image'],
+        'image_url': product['image_url'] ?? product['imageUrl'] ?? product['image'],
       });
     }
     notifyListeners();
@@ -170,6 +172,8 @@ class CartService extends ChangeNotifier {
           'quantity': guestQuantity,
           'quantity_in_stock': guestItem['quantity_in_stock'] ?? 0,
           'sku': guestItem['sku'] ?? guestItem['serial_number'] ?? 'SKU000',
+          'imageUrl': guestItem['imageUrl'] ?? guestItem['image_url'] ?? guestItem['image'],
+          'image_url': guestItem['image_url'] ?? guestItem['imageUrl'] ?? guestItem['image'],
         });
       }
     }
