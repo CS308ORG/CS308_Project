@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart'; // Added for date formatting
+import 'package:pdf/pdf.dart'; // Added for PDF generation
+import 'package:pdf/widgets.dart' as pw; // Added for PDF widgets
+import 'package:printing/printing.dart'; // Added for PDF printing/saving
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import 'home_screen.dart';
@@ -28,7 +32,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   static const Color _accentColor = Color(0xFFFF7733);
   static const Color _borderColor = Color(0xFFE5E7EB);
   static const Color _cardBackground = Colors.white;
-  static const Color _pageBackground = Color(0xFFFFF5E6); // Match site theme
+  static const Color _pageBackground = Color(0xFFFFF5E6);
 
   @override
   void initState() {
@@ -154,7 +158,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             _orders = fetchedOrders;
             _loading = false;
           });
-          // Scroll to highlighted order after build
           if (widget.highlightOrderId != null) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               _scrollToHighlightedOrder();
@@ -166,6 +169,171 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       }
     } else {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// PDF Generation Logic
+  Future<void> _downloadInvoice(Map<String, dynamic> order) async {
+    try {
+      final doc = pw.Document();
+      final orderId = order['order_id'] ?? order['id'];
+      final dateStr = _formatDateWithTime(order['created_at'] ?? order['date']);
+      final items = (order['items'] as List<dynamic>?) ?? [];
+      final total = (order['total_amount'] as num?)?.toDouble() ?? 0.0;
+      final address = order['delivery_address'] ?? 'N/A';
+
+      doc.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          build: (pw.Context context) {
+            return pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                // Header
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                      "INVOICE",
+                      style: pw.TextStyle(
+                        fontSize: 40,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.orange800,
+                      ),
+                    ),
+                    pw.Text(
+                      "CS308 STORE",
+                      style: pw.TextStyle(
+                        fontSize: 20,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 20),
+                pw.Divider(),
+                pw.SizedBox(height: 10),
+
+                // Order Details
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(
+                          "Billed To:",
+                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                        ),
+                        pw.Text("Customer ID: ${order['user_id'] ?? 'N/A'}"),
+                        pw.Text(address),
+                      ],
+                    ),
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.end,
+                      children: [
+                        pw.Text(
+                          "Order ID: #$orderId",
+                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                        ),
+                        pw.Text("Date: $dateStr"),
+                        pw.Text(
+                          "Status: ${(order['status'] ?? 'N/A').toString().toUpperCase()}",
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 30),
+
+                // Items Table
+                pw.Table.fromTextArray(
+                  context: context,
+                  border: null,
+                  headerDecoration: pw.BoxDecoration(
+                    color: PdfColors.orange100,
+                  ),
+                  headerHeight: 30,
+                  cellHeight: 30,
+                  cellAlignments: {
+                    0: pw.Alignment.centerLeft,
+                    1: pw.Alignment.centerRight,
+                    2: pw.Alignment.centerRight,
+                    3: pw.Alignment.centerRight,
+                  },
+                  headerStyle: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.orange900,
+                  ),
+                  headers: ['Product', 'Quantity', 'Unit Price', 'Total'],
+                  data: items.map((item) {
+                    final name = item['name'] ?? 'Item';
+                    final qty = item['quantity'] ?? 1;
+                    final price =
+                        (item['unit_price'] as num?)?.toDouble() ?? 0.0;
+                    return [
+                      name,
+                      '$qty',
+                      '${price.toStringAsFixed(2)} TL',
+                      '${(price * qty).toStringAsFixed(2)} TL',
+                    ];
+                  }).toList(),
+                ),
+                pw.Divider(),
+                pw.SizedBox(height: 10),
+
+                // Total
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.end,
+                  children: [
+                    pw.Text(
+                      "Grand Total: ",
+                      style: pw.TextStyle(
+                        fontSize: 16,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                    pw.Text(
+                      "${total.toStringAsFixed(2)} TL",
+                      style: pw.TextStyle(
+                        fontSize: 16,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.orange800,
+                      ),
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 40),
+                pw.Center(
+                  child: pw.Text(
+                    "Thank you for your business!",
+                    style: pw.TextStyle(
+                      fontStyle: pw.FontStyle.italic,
+                      color: PdfColors.grey700,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+
+      // Open sharing/saving dialog
+      await Printing.sharePdf(
+        bytes: await doc.save(),
+        filename: 'invoice_$orderId.pdf',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to generate invoice: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -392,7 +560,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                               final order = _orders[index];
                               final orderIdInt =
                                   order['order_id'] ?? order['id'];
-                              // Create key for scrolling to this order
                               if (orderIdInt != null) {
                                 _orderKeys[orderIdInt] ??= GlobalKey();
                               }
@@ -563,31 +730,66 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
               ],
             ),
 
-            // Cancel Button
-            if (statusRaw?.toLowerCase() == 'processing') ...[
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () => _cancelOrder(order),
-                  icon: Icon(Icons.close, size: 18, color: Colors.red.shade400),
-                  label: Text(
-                    'Cancel Order',
-                    style: TextStyle(
-                      color: Colors.red.shade400,
-                      fontWeight: FontWeight.w500,
+            // Action Buttons
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                // Download Invoice Button
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _downloadInvoice(order),
+                    icon: Icon(
+                      Icons.file_download_outlined,
+                      size: 18,
+                      color: _accentColor,
                     ),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: Colors.red.shade200),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                    label: Text(
+                      'Download Invoice',
+                      style: TextStyle(
+                        color: _accentColor,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: _accentColor.withOpacity(0.5)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+                if (statusRaw?.toLowerCase() == 'processing') ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _cancelOrder(order),
+                      icon: Icon(
+                        Icons.close,
+                        size: 18,
+                        color: Colors.red.shade400,
+                      ),
+                      label: Text(
+                        'Cancel Order',
+                        style: TextStyle(
+                          color: Colors.red.shade400,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 13,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.red.shade200),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ],
         ),
       ),
@@ -625,7 +827,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     final unitPrice = (item['unit_price'] as num?)?.toDouble() ?? 0.0;
     final imageUrl = getProductImageUrl(item);
 
-    // Calculate Refund Eligibility
     DateTime? purchaseDate;
     if (order['created_at'] != null) {
       purchaseDate = DateTime.tryParse(order['created_at'].toString());
@@ -646,7 +847,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
         padding: const EdgeInsets.symmetric(vertical: 10),
         child: Row(
           children: [
-            // Product Image
             Container(
               width: 56,
               height: 56,
@@ -667,7 +867,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                   : _productPlaceholder(),
             ),
             const SizedBox(width: 16),
-            // Product Details
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -685,7 +884,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                     "Qty: $qty  •  ${unitPrice.toStringAsFixed(2)} TL each",
                     style: TextStyle(fontSize: 12, color: _secondaryText),
                   ),
-                  // Refund status or button
                   if (orderStatus == 'delivered' && isWithin30Days) ...[
                     const SizedBox(height: 8),
                     if (item['refund_status'] != null)
@@ -941,7 +1139,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header
                 Row(
                   children: [
                     Container(
@@ -986,8 +1183,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                   ],
                 ),
                 const SizedBox(height: 28),
-
-                // Product Info
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -1016,7 +1211,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                     ],
                   ),
                 ),
-
                 if (!isWithin30Days) ...[
                   const SizedBox(height: 16),
                   Container(
@@ -1048,7 +1242,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                     ),
                   ),
                 ],
-
                 const SizedBox(height: 24),
                 Text(
                   'Reason (Optional)',
@@ -1087,8 +1280,6 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                   ),
                 ),
                 const SizedBox(height: 28),
-
-                // Buttons
                 Row(
                   children: [
                     Expanded(
