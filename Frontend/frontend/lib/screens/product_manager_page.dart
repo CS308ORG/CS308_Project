@@ -34,6 +34,11 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
     'delivered': 0,
   };
 
+  // Search state
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  List<dynamic> _allOrders = [];
+
   @override
   void initState() {
     super.initState();
@@ -54,6 +59,7 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
   void dispose() {
     _animationController.dispose();
     _scrollController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -91,7 +97,8 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
       );
 
       setState(() {
-        _orders = response.orders;
+        _allOrders = response.orders;
+        _orders = _filterOrdersBySearch(_allOrders);
         _currentPage = response.page;
         _totalCount = response.totalCount;
         _hasNextPage = response.hasNext;
@@ -105,6 +112,30 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
         _loading = false;
       });
     }
+  }
+
+  List<dynamic> _filterOrdersBySearch(List<dynamic> orders) {
+    if (_searchQuery.isEmpty) return orders;
+
+    return orders.where((order) {
+      final orderId = order['order_id']?.toString() ?? order['id']?.toString() ?? '';
+      return orderId.toLowerCase().contains(_searchQuery.toLowerCase());
+    }).toList();
+  }
+
+  void _onSearchChanged(String query) {
+    setState(() {
+      _searchQuery = query;
+      _orders = _filterOrdersBySearch(_allOrders);
+    });
+  }
+
+  void _clearSearch() {
+    setState(() {
+      _searchController.clear();
+      _searchQuery = '';
+      _orders = _allOrders;
+    });
   }
 
   Future<void> _loadMoreOrders() async {
@@ -124,7 +155,8 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
       );
 
       setState(() {
-        _orders.addAll(response.orders);
+        _allOrders.addAll(response.orders);
+        _orders = _filterOrdersBySearch(_allOrders);
         _currentPage = response.page;
         _hasNextPage = response.hasNext;
         _isLoadingMore = false;
@@ -230,120 +262,197 @@ class _ProductManagerPageState extends State<ProductManagerPage> with SingleTick
       backgroundColor: Color(0xFFFFF5E6),
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: Color(0xFFFF7733),
-        title: Row(
-          children: [
-            Container(
-              padding: EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                Icons.local_shipping_rounded,
-                color: Colors.white,
-                size: 24,
-              ),
-            ),
-            SizedBox(width: 12),
-            Text(
-              'Delivery Queue',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
+        backgroundColor: Color(0xFFFFF5E6),
+        iconTheme: IconThemeData(color: Color(0xFF1A1A2E)),
         actions: [
-          Container(
-            margin: EdgeInsets.only(right: 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: IconButton(
-              icon: Icon(Icons.refresh_rounded),
-              onPressed: _loadOrders,
-              tooltip: 'Refresh',
-            ),
+          IconButton(
+            icon: Icon(Icons.refresh_rounded, color: Color(0xFFFF7733)),
+            onPressed: _loadOrders,
+            tooltip: 'Refresh',
           ),
         ],
       ),
       body: FadeTransition(
         opacity: _fadeAnimation,
-        child: Column(
-          children: [
-            Container(
-              color: Colors.white,
-              padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        child: SingleChildScrollView(
+          controller: _scrollController,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: 1200),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Total: $_totalCount orders',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                      _buildSortDropdown(),
-                    ],
-                  ),
-                  SizedBox(height: 12),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
+                  // Header Section
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(24, 24, 24, 32),
+                    child: Column(
                       children: [
-                        _buildFilterChip('All Orders', 'all', _statusCounts['all'] ?? 0, Colors.grey, Icons.list_rounded),
-                        SizedBox(width: 12),
-                        _buildFilterChip('Processing', 'processing', _statusCounts['processing'] ?? 0, Colors.orange, Icons.hourglass_empty_rounded),
-                        SizedBox(width: 12),
-                        _buildFilterChip('In Transit', 'in-transit', _statusCounts['in-transit'] ?? 0, Colors.blue, Icons.local_shipping_rounded),
-                        SizedBox(width: 12),
-                        _buildFilterChip('Delivered', 'delivered', _statusCounts['delivered'] ?? 0, Colors.green, Icons.check_circle_rounded),
+                        Text(
+                          "DELIVERY QUEUE",
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w300,
+                            letterSpacing: 4,
+                            color: Color(0xFF1A1A2E),
+                          ),
+                        ),
+                        SizedBox(height: 12),
+                        Container(width: 40, height: 2, color: Color(0xFFFF7733)),
+                        SizedBox(height: 24),
+                        // Search Bar
+                        Container(
+                          constraints: BoxConstraints(maxWidth: 600),
+                          child: TextField(
+                            controller: _searchController,
+                            onChanged: _onSearchChanged,
+                            decoration: InputDecoration(
+                              hintText: 'Search by Order ID...',
+                              hintStyle: TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
+                              prefixIcon: Icon(Icons.search, color: Color(0xFF6B7280), size: 20),
+                              suffixIcon: _searchQuery.isNotEmpty
+                                  ? IconButton(
+                                      icon: Icon(Icons.clear, color: Color(0xFF6B7280), size: 20),
+                                      onPressed: _clearSearch,
+                                    )
+                                  : null,
+                              filled: true,
+                              fillColor: Colors.white,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Color(0xFFE5E7EB), width: 1),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Color(0xFFE5E7EB), width: 1),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Color(0xFFFF7733), width: 2),
+                              ),
+                              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 16),
+                        // Summary Info Card
+                        Container(
+                          padding: EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Color(0xFFE5E7EB), width: 0.5),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.inventory_2_outlined, size: 20, color: Color(0xFF6B7280)),
+                              SizedBox(width: 8),
+                              Text(
+                                _searchQuery.isEmpty ? 'Total Orders: ' : 'Found: ',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Color(0xFF6B7280),
+                                ),
+                              ),
+                              Text(
+                                _searchQuery.isEmpty ? '$_totalCount' : '${_orders.length}',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF1A1A2E),
+                                ),
+                              ),
+                              if (_searchQuery.isNotEmpty) ...[
+                                Text(
+                                  ' of $_totalCount',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Color(0xFF6B7280),
+                                  ),
+                                ),
+                              ],
+                              SizedBox(width: 24),
+                              _buildSortDropdown(),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
+                  // Filter Chips
+                  Container(
+                    color: Colors.white,
+                    padding: EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildFilterChip('All Orders', 'all', _statusCounts['all'] ?? 0, Colors.grey, Icons.list_rounded),
+                          SizedBox(width: 12),
+                          _buildFilterChip('Processing', 'processing', _statusCounts['processing'] ?? 0, Colors.orange, Icons.hourglass_empty_rounded),
+                          SizedBox(width: 12),
+                          _buildFilterChip('In Transit', 'in-transit', _statusCounts['in-transit'] ?? 0, Colors.blue, Icons.local_shipping_rounded),
+                          SizedBox(width: 12),
+                          _buildFilterChip('Delivered', 'delivered', _statusCounts['delivered'] ?? 0, Colors.green, Icons.check_circle_rounded),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Orders List
+                  _loading
+                      ? Container(
+                          height: 400,
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              color: Color(0xFFFF7733),
+                              strokeWidth: 3,
+                            ),
+                          ),
+                        )
+                      : _error != null
+                          ? _buildError()
+                          : _orders.isEmpty
+                              ? _buildEmptyState()
+                              : Column(
+                                  children: [
+                                    ListView.builder(
+                                      shrinkWrap: true,
+                                      physics: NeverScrollableScrollPhysics(),
+                                      padding: EdgeInsets.all(16),
+                                      itemCount: _orders.length,
+                                      itemBuilder: (context, index) {
+                                        return _buildOrderCard(_orders[index]);
+                                      },
+                                    ),
+                                    if (_isLoadingMore)
+                                      Center(
+                                        child: Padding(
+                                          padding: EdgeInsets.all(16),
+                                          child: CircularProgressIndicator(
+                                            color: Color(0xFFFF7733),
+                                            strokeWidth: 2,
+                                          ),
+                                        ),
+                                      ),
+                                    if (!_hasNextPage && _orders.isNotEmpty)
+                                      Padding(
+                                        padding: EdgeInsets.all(24),
+                                        child: Text(
+                                          'No more orders to load',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            color: Color(0xFF6B7280),
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
                 ],
               ),
             ),
-            Expanded(
-              child: _loading
-                  ? Center(
-                      child: CircularProgressIndicator(
-                        color: Color(0xFFFF7733),
-                        strokeWidth: 3,
-                      ),
-                    )
-                  : _error != null
-                      ? _buildError()
-                      : _orders.isEmpty
-                          ? _buildEmptyState()
-                          : ListView.builder(
-                              controller: _scrollController,
-                              padding: EdgeInsets.all(16),
-                              itemCount: _orders.length + (_isLoadingMore ? 1 : 0),
-                              itemBuilder: (context, index) {
-                                if (index == _orders.length) {
-                                  return Center(
-                                    child: Padding(
-                                      padding: EdgeInsets.all(16),
-                                      child: CircularProgressIndicator(
-                                        color: Color(0xFFFF7733),
-                                        strokeWidth: 2,
-                                      ),
-                                    ),
-                                  );
-                                }
-                                return _buildOrderCard(_orders[index]);
-                              },
-                            ),
-            ),
-          ],
+          ),
         ),
       ),
     );
