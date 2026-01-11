@@ -1675,11 +1675,13 @@ app.post('/refunds/request', authenticate, async (req, res) => {
 
         // Create refund request
         // Store the original unit_price to preserve purchase-time discount
+        // Normalize user_id to integer for consistency with notifications
+        const userIdNormalized = /^\d+$/.test(String(userId)) ? parseInt(userId) : userId;
         const refundData = {
             refund_id: refundId,
             order_id: Number(order_id),
             product_id: Number(product_id),
-            user_id: userId,
+            user_id: userIdNormalized,
             customer_name: customerName, // Store customer name
             customer_email: encrypt(customerEmail), // Encrypt customer email
             quantity: orderItem.quantity || 1,
@@ -2056,7 +2058,7 @@ app.put('/refunds/:id/approve', authenticate, authorize(['sales_manager', 'admin
                 console.error('Cannot send refund notification: missing user_id');
             } else {
                 const userDoc = await db.collection('users').doc(String(userId)).get();
-                const userEmail = userDoc.exists ? userDoc.data().email : null;
+                const userEmail = userDoc.exists ? decrypt(userDoc.data().email) : null;
                 const userName = userDoc.exists ? userDoc.data().name : 'Customer';
 
                 const productDoc = await db.collection('products').doc(String(refundData.product_id)).get();
@@ -2066,13 +2068,14 @@ app.put('/refunds/:id/approve', authenticate, authorize(['sales_manager', 'admin
                 const refundQty = finalRefundData.quantity || refundQuantity || 1;
 
                 if (decisionNormalized === 'approved') {
-                    // Send approval email with professional template
+                    // Send approval email with professional template (separate try-catch so email failure doesn't prevent notification)
                     if (userEmail && emailTransporter) {
-                        const mailOptions = {
-                            from: process.env.EMAIL_USER || 'noreply@cs308shop.com',
-                            to: userEmail,
-                            subject: `Refund Approved - Order #${refundData.order_id}`,
-                            html: `
+                        try {
+                            const mailOptions = {
+                                from: process.env.EMAIL_USER || 'noreply@cs308shop.com',
+                                to: userEmail,
+                                subject: `Refund Approved - Order #${refundData.order_id}`,
+                                html: `
 <!DOCTYPE html>
 <html>
 <head>
@@ -2143,38 +2146,47 @@ app.put('/refunds/:id/approve', authenticate, authorize(['sales_manager', 'admin
   </table>
 </body>
 </html>
-                            `
-                        };
-                        await emailTransporter.sendMail(mailOptions);
-                        console.log(`Refund approval email sent to ${userEmail}`);
+                                `
+                            };
+                            await emailTransporter.sendMail(mailOptions);
+                            console.log(`Refund approval email sent to ${userEmail}`);
+                        } catch (emailErr) {
+                            console.error('Refund approval email error:', emailErr);
+                            // Continue to notification creation even if email fails
+                        }
                     }
 
-                    // Create in-app notification for approval
-                    // Convert userId to integer if it's a numeric string for consistency
-                    const userIdInt = /^\d+$/.test(String(userId)) ? parseInt(userId) : userId;
-                    const approvalNotification = {
-                        user_id: userIdInt,
-                        type: 'refund_approved',
-                        title: 'Refund Approved',
-                        message: `Your refund for ${productName} ($${refundAmount.toFixed(2)}) has been approved and will be credited to your original payment method.`,
-                        refund_id: id,
-                        order_id: refundData.order_id,
-                        product_name: productName,
-                        refund_amount: refundAmount,
-                        is_read: false,
-                        created_at: FieldValue.serverTimestamp()
-                    };
-                    await db.collection('notifications').add(approvalNotification);
-                    console.log(`Refund approval in-app notification created for user ${userId}`);
+                    // Create in-app notification for approval (separate try-catch so it always runs)
+                    try {
+                        // Convert userId to integer if it's a numeric string for consistency
+                        const userIdInt = /^\d+$/.test(String(userId)) ? parseInt(userId) : userId;
+                        const approvalNotification = {
+                            user_id: userIdInt,
+                            type: 'refund_approved',
+                            title: 'Refund Approved',
+                            message: `Your refund for ${productName} ($${refundAmount.toFixed(2)}) has been approved and will be credited to your original payment method.`,
+                            refund_id: id,
+                            order_id: refundData.order_id,
+                            product_name: productName,
+                            refund_amount: refundAmount,
+                            is_read: false,
+                            created_at: FieldValue.serverTimestamp()
+                        };
+                        await db.collection('notifications').add(approvalNotification);
+                        console.log(`Refund approval in-app notification created for user ${userId}`);
+                    } catch (notificationErr) {
+                        console.error('Refund approval notification error:', notificationErr);
+                    }
 
                 } else {
-                    // Send rejection email with professional template
+                    // Send rejection email with professional template (separate try-catch so email failure doesn't prevent notification)
                     if (userEmail && emailTransporter) {
-                        const mailOptions = {
-                            from: process.env.EMAIL_USER || 'noreply@cs308shop.com',
-                            to: userEmail,
-                            subject: `Refund Request Update - Order #${refundData.order_id}`,
-                            html: `
+                        try {
+                            const mailOptions = {
+                                from: process.env.EMAIL_USER || 'noreply@cs308shop.com',
+                                to: userEmail,
+                                subject: `Refund Request Update - Order #${refundData.order_id}`,
+                                html: `
 <!DOCTYPE html>
 <html>
 <head>
@@ -2245,33 +2257,41 @@ app.put('/refunds/:id/approve', authenticate, authorize(['sales_manager', 'admin
   </table>
 </body>
 </html>
-                            `
-                        };
-                        await emailTransporter.sendMail(mailOptions);
-                        console.log(`Refund rejection email sent to ${userEmail}`);
+                                `
+                            };
+                            await emailTransporter.sendMail(mailOptions);
+                            console.log(`Refund rejection email sent to ${userEmail}`);
+                        } catch (emailErr) {
+                            console.error('Refund rejection email error:', emailErr);
+                            // Continue to notification creation even if email fails
+                        }
                     }
 
-                    // Create in-app notification for rejection
-                    // Convert userId to integer if it's a numeric string for consistency
-                    const userIdIntRej = /^\d+$/.test(String(userId)) ? parseInt(userId) : userId;
-                    const rejectionNotification = {
-                        user_id: userIdIntRej,
-                        type: 'refund_rejected',
-                        title: 'Refund Request Declined',
-                        message: `Your refund request for ${productName} was not approved.${reason ? ' Reason: ' + reason : ''}`,
-                        refund_id: id,
-                        order_id: refundData.order_id,
-                        product_name: productName,
-                        is_read: false,
-                        created_at: FieldValue.serverTimestamp()
-                    };
-                    await db.collection('notifications').add(rejectionNotification);
-                    console.log(`Refund rejection in-app notification created for user ${userId}`);
+                    // Create in-app notification for rejection (separate try-catch so it always runs)
+                    try {
+                        // Convert userId to integer if it's a numeric string for consistency
+                        const userIdIntRej = /^\d+$/.test(String(userId)) ? parseInt(userId) : userId;
+                        const rejectionNotification = {
+                            user_id: userIdIntRej,
+                            type: 'refund_rejected',
+                            title: 'Refund Request Declined',
+                            message: `Your refund request for ${productName} was not approved.${reason ? ' Reason: ' + reason : ''}`,
+                            refund_id: id,
+                            order_id: refundData.order_id,
+                            product_name: productName,
+                            is_read: false,
+                            created_at: FieldValue.serverTimestamp()
+                        };
+                        await db.collection('notifications').add(rejectionNotification);
+                        console.log(`Refund rejection in-app notification created for user ${userId}`);
+                    } catch (notificationErr) {
+                        console.error('Refund rejection notification error:', notificationErr);
+                    }
                 }
             }
-        } catch (notificationErr) {
-            console.error('Refund notification error:', notificationErr);
-            // Don't fail the request if notification fails
+        } catch (outerErr) {
+            console.error('Refund notification/email outer error:', outerErr);
+            // Don't fail the request if notification/email fails
         }
 
         const updatedRefund = await refundRef.get();
