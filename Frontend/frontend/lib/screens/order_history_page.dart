@@ -60,7 +60,8 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
 
     if (uid == null && AuthService().isLoggedIn) {
       final currentUser = AuthService().currentUser;
-      uid = currentUser?['id']?.toString() ?? currentUser?['user_id']?.toString();
+      uid =
+          currentUser?['id']?.toString() ?? currentUser?['user_id']?.toString();
     }
 
     if (uid != null) {
@@ -75,22 +76,40 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             {
               "order_id": 1001,
               "status": "processing",
-              "date": "2023-11-01T10:00:00",
+              "created_at": "2023-11-01T10:00:00",
               "delivery_address": "Sabanci Univ, Istanbul",
               "total_amount": 1899.70,
               "items": [
-                {"product_id": 1, "name": "Wireless Headphones", "quantity": 1, "unit_price": 1499.90, "imageUrl": null},
-                {"product_id": 4, "name": "Cotton T-Shirt L", "quantity": 2, "unit_price": 199.90, "imageUrl": null},
+                {
+                  "product_id": 1,
+                  "name": "Wireless Headphones",
+                  "quantity": 1,
+                  "unit_price": 1499.90,
+                  "imageUrl": null,
+                },
+                {
+                  "product_id": 4,
+                  "name": "Cotton T-Shirt L",
+                  "quantity": 2,
+                  "unit_price": 199.90,
+                  "imageUrl": null,
+                },
               ],
             },
             {
               "order_id": 1009,
               "status": "in_transit",
-              "date": "2023-10-20T09:15:00",
+              "created_at": "2023-10-20T09:15:00",
               "delivery_address": "Kocaeli, TR",
               "total_amount": 28158.00,
               "items": [
-                {"product_id": 3, "name": "Laptop Pro 14", "quantity": 1, "unit_price": 27999.00, "imageUrl": null},
+                {
+                  "product_id": 3,
+                  "name": "Laptop Pro 14",
+                  "quantity": 1,
+                  "unit_price": 27999.00,
+                  "imageUrl": null,
+                },
               ],
             },
           ];
@@ -153,18 +172,29 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   String _formatStatus(String? status) {
     if (status == null) return "Unknown";
     switch (status.toLowerCase()) {
-      case 'in_transit': return 'In Transit';
-      case 'delivered': return 'Delivered';
-      case 'processing': return 'Processing';
-      case 'cancelled': return 'Cancelled';
+      case 'in_transit':
+        return 'In Transit';
+      case 'delivered':
+        return 'Delivered';
+      case 'processing':
+        return 'Processing';
+      case 'cancelled':
+        return 'Cancelled';
       default:
-        if (status.length > 1) return status[0].toUpperCase() + status.substring(1);
+        if (status.length > 1)
+          return status[0].toUpperCase() + status.substring(1);
         return status.toUpperCase();
     }
   }
 
   String? getProductImageUrl(Map<String, dynamic> product) {
-    final keys = ['imageUrl', 'image_url', 'image', 'thumbnailUrl', 'thumbnail_url'];
+    final keys = [
+      'imageUrl',
+      'image_url',
+      'image',
+      'thumbnailUrl',
+      'thumbnail_url',
+    ];
     for (final key in keys) {
       if (product[key] != null && product[key].toString().isNotEmpty) {
         return product[key].toString();
@@ -184,7 +214,20 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
         final parsed = DateTime.parse(dateStr);
         date = parsed.isUtc ? parsed.toLocal() : parsed;
       }
-      final monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      final monthNames = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
       return "${date.day} ${monthNames[date.month - 1]} ${date.year}, ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}";
     } catch (e) {
       return "Invalid date";
@@ -202,7 +245,10 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       userEmail = firebaseUser.email ?? 'No Email';
     } else if (AuthService().isLoggedIn) {
       final customUser = AuthService().currentUser;
-      userId = customUser?['id']?.toString() ?? customUser?['user_id']?.toString() ?? 'N/A';
+      userId =
+          customUser?['id']?.toString() ??
+          customUser?['user_id']?.toString() ??
+          'N/A';
       userEmail = customUser?['email'] ?? 'N/A';
     }
 
@@ -210,7 +256,12 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       body: Container(
         color: _pageBackground,
         child: _loading
-            ? const Center(child: CircularProgressIndicator(color: _accentColor, strokeWidth: 2))
+            ? const Center(
+                child: CircularProgressIndicator(
+                  color: _accentColor,
+                  strokeWidth: 2,
+                ),
+              )
             : SingleChildScrollView(
                 padding: const EdgeInsets.only(bottom: 80),
                 child: Center(
@@ -234,21 +285,38 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                                 ),
                               ),
                               const SizedBox(height: 12),
-                              Container(width: 40, height: 2, color: _accentColor),
+                              Container(
+                                width: 40,
+                                height: 2,
+                                color: _accentColor,
+                              ),
                               const SizedBox(height: 32),
                               // User Info Card
                               Container(
-                                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 32),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 20,
+                                  horizontal: 32,
+                                ),
                                 decoration: BoxDecoration(
                                   color: _cardBackground,
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: _borderColor, width: 0.5),
+                                  border: Border.all(
+                                    color: _borderColor,
+                                    width: 0.5,
+                                  ),
                                 ),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     _buildUserInfoItem("CUSTOMER ID", userId),
-                                    Container(height: 40, width: 1, color: _borderColor, margin: const EdgeInsets.symmetric(horizontal: 32)),
+                                    Container(
+                                      height: 40,
+                                      width: 1,
+                                      color: _borderColor,
+                                      margin: const EdgeInsets.symmetric(
+                                        horizontal: 32,
+                                      ),
+                                    ),
                                     _buildUserInfoItem("EMAIL", userEmail),
                                   ],
                                 ),
@@ -260,20 +328,33 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                         if (_isUsingMockData)
                           Container(
                             padding: const EdgeInsets.all(16),
-                            margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.amber.shade50,
-                              border: Border.all(color: Colors.amber.shade300, width: 0.5),
+                              border: Border.all(
+                                color: Colors.amber.shade300,
+                                width: 0.5,
+                              ),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Row(
                               children: [
-                                Icon(Icons.info_outline, color: Colors.amber.shade700, size: 20),
+                                Icon(
+                                  Icons.info_outline,
+                                  color: Colors.amber.shade700,
+                                  size: 20,
+                                ),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
                                     "No orders found. Displaying sample data.",
-                                    style: TextStyle(color: Colors.amber.shade800, fontSize: 13),
+                                    style: TextStyle(
+                                      color: Colors.amber.shade800,
+                                      fontSize: 13,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -285,11 +366,19 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                             padding: const EdgeInsets.all(48),
                             child: Column(
                               children: [
-                                Icon(Icons.shopping_bag_outlined, size: 64, color: _secondaryText.withOpacity(0.3)),
+                                Icon(
+                                  Icons.shopping_bag_outlined,
+                                  size: 64,
+                                  color: _secondaryText.withOpacity(0.3),
+                                ),
                                 const SizedBox(height: 16),
                                 Text(
                                   "No orders yet",
-                                  style: TextStyle(fontSize: 16, color: _secondaryText, fontWeight: FontWeight.w300),
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: _secondaryText,
+                                    fontWeight: FontWeight.w300,
+                                  ),
                                 ),
                               ],
                             ),
@@ -301,12 +390,16 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                             itemCount: _orders.length,
                             itemBuilder: (context, index) {
                               final order = _orders[index];
-                              final orderIdInt = order['order_id'] ?? order['id'];
+                              final orderIdInt =
+                                  order['order_id'] ?? order['id'];
                               // Create key for scrolling to this order
                               if (orderIdInt != null) {
                                 _orderKeys[orderIdInt] ??= GlobalKey();
                               }
-                              return _buildOrderCard(order, key: _orderKeys[orderIdInt]);
+                              return _buildOrderCard(
+                                order,
+                                key: _orderKeys[orderIdInt],
+                              );
                             },
                           ),
                       ],
@@ -351,9 +444,12 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     final dateValue = order['created_at'] ?? order['date'];
     final dateFormatted = _formatDateWithTime(dateValue);
     final address = order['delivery_address'] ?? 'N/A';
-    final orderId = order['order_id']?.toString() ?? order['id']?.toString() ?? 'N/A';
+    final orderId =
+        order['order_id']?.toString() ?? order['id']?.toString() ?? 'N/A';
     final orderIdInt = order['order_id'] ?? order['id'];
-    final isHighlighted = widget.highlightOrderId != null && orderIdInt == widget.highlightOrderId;
+    final isHighlighted =
+        widget.highlightOrderId != null &&
+        orderIdInt == widget.highlightOrderId;
 
     return Container(
       key: key,
@@ -366,7 +462,9 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             : Border(left: BorderSide(color: _accentColor, width: 3)),
         boxShadow: [
           BoxShadow(
-            color: isHighlighted ? _accentColor.withOpacity(0.2) : Colors.black.withOpacity(0.04),
+            color: isHighlighted
+                ? _accentColor.withOpacity(0.2)
+                : Colors.black.withOpacity(0.04),
             blurRadius: isHighlighted ? 12 : 20,
             offset: const Offset(0, 4),
           ),
@@ -386,10 +484,18 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                   children: [
                     Text(
                       'Order #$orderId',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: _primaryText, letterSpacing: 0.5),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: _primaryText,
+                        letterSpacing: 0.5,
+                      ),
                     ),
                     const SizedBox(height: 4),
-                    Text(dateFormatted, style: TextStyle(fontSize: 12, color: _secondaryText)),
+                    Text(
+                      dateFormatted,
+                      style: TextStyle(fontSize: 12, color: _secondaryText),
+                    ),
                   ],
                 ),
                 _buildStatusBadge(statusRaw, statusFormatted),
@@ -400,10 +506,17 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             // Delivery Address
             Row(
               children: [
-                Icon(Icons.location_on_outlined, color: _secondaryText, size: 18),
+                Icon(
+                  Icons.location_on_outlined,
+                  color: _secondaryText,
+                  size: 18,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(address, style: TextStyle(color: _secondaryText, fontSize: 13)),
+                  child: Text(
+                    address,
+                    style: TextStyle(color: _secondaryText, fontSize: 13),
+                  ),
                 ),
               ],
             ),
@@ -415,10 +528,17 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             // Products Section
             Text(
               "ITEMS",
-              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: _secondaryText, letterSpacing: 1.5),
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: _secondaryText,
+                letterSpacing: 1.5,
+              ),
             ),
             const SizedBox(height: 12),
-            ...items.map((item) => _buildProductItem(item, order, statusRaw)).toList(),
+            ...items
+                .map((item) => _buildProductItem(item, order, statusRaw))
+                .toList(),
 
             const SizedBox(height: 16),
             Container(height: 1, color: _borderColor),
@@ -428,10 +548,17 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text("Total", style: TextStyle(fontSize: 14, color: _secondaryText)),
+                Text(
+                  "Total",
+                  style: TextStyle(fontSize: 14, color: _secondaryText),
+                ),
                 Text(
                   "${totalAmount.toStringAsFixed(2)} TL",
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: _primaryText),
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: _primaryText,
+                  ),
                 ),
               ],
             ),
@@ -444,11 +571,19 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                 child: OutlinedButton.icon(
                   onPressed: () => _cancelOrder(order),
                   icon: Icon(Icons.close, size: 18, color: Colors.red.shade400),
-                  label: Text('Cancel Order', style: TextStyle(color: Colors.red.shade400, fontWeight: FontWeight.w500)),
+                  label: Text(
+                    'Cancel Order',
+                    style: TextStyle(
+                      color: Colors.red.shade400,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                   style: OutlinedButton.styleFrom(
                     side: BorderSide(color: Colors.red.shade200),
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                 ),
               ),
@@ -470,17 +605,39 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       ),
       child: Text(
         formatted,
-        style: TextStyle(color: color, fontWeight: FontWeight.w500, fontSize: 12),
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w500,
+          fontSize: 12,
+        ),
       ),
     );
   }
 
-  Widget _buildProductItem(Map<String, dynamic> item, Map<String, dynamic> order, String? orderStatus) {
+  Widget _buildProductItem(
+    Map<String, dynamic> item,
+    Map<String, dynamic> order,
+    String? orderStatus,
+  ) {
     final qty = item['quantity'] ?? 1;
     final pid = item['product_id'] ?? item['sku'] ?? '-';
     final name = item['name'] ?? 'Unknown Product';
     final unitPrice = (item['unit_price'] as num?)?.toDouble() ?? 0.0;
     final imageUrl = getProductImageUrl(item);
+
+    // Calculate Refund Eligibility
+    DateTime? purchaseDate;
+    if (order['created_at'] != null) {
+      purchaseDate = DateTime.tryParse(order['created_at'].toString());
+    }
+    if (purchaseDate == null && order['date'] != null) {
+      purchaseDate = DateTime.tryParse(order['date'].toString());
+    }
+
+    bool isWithin30Days = false;
+    if (purchaseDate != null) {
+      isWithin30Days = DateTime.now().difference(purchaseDate).inDays <= 30;
+    }
 
     return InkWell(
       onTap: () => _navigateToProduct(item, pid, name),
@@ -501,7 +658,11 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
               child: imageUrl != null
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(7),
-                      child: Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _productPlaceholder()),
+                      child: Image.network(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => _productPlaceholder(),
+                      ),
                     )
                   : _productPlaceholder(),
             ),
@@ -511,11 +672,21 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name, style: TextStyle(fontSize: 14, color: _primaryText, fontWeight: FontWeight.w500)),
+                  Text(
+                    name,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: _primaryText,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text("Qty: $qty  •  ${unitPrice.toStringAsFixed(2)} TL each", style: TextStyle(fontSize: 12, color: _secondaryText)),
+                  Text(
+                    "Qty: $qty  •  ${unitPrice.toStringAsFixed(2)} TL each",
+                    style: TextStyle(fontSize: 12, color: _secondaryText),
+                  ),
                   // Refund status or button
-                  if (orderStatus == 'delivered') ...[
+                  if (orderStatus == 'delivered' && isWithin30Days) ...[
                     const SizedBox(height: 8),
                     if (item['refund_status'] != null)
                       _buildRefundStatusChip(item['refund_status'])
@@ -523,14 +694,23 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                       GestureDetector(
                         onTap: () => _showRefundDialog(context, order, item),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
                           decoration: BoxDecoration(
-                            border: Border.all(color: _accentColor.withOpacity(0.5)),
+                            border: Border.all(
+                              color: _accentColor.withOpacity(0.5),
+                            ),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
                             "Request Refund",
-                            style: TextStyle(fontSize: 11, color: _accentColor, fontWeight: FontWeight.w500),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: _accentColor,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ),
                       ),
@@ -540,7 +720,11 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             ),
             Text(
               "${(unitPrice * qty).toStringAsFixed(2)} TL",
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _primaryText),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: _primaryText,
+              ),
             ),
           ],
         ),
@@ -555,20 +739,36 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       decoration: BoxDecoration(
         color: isApproved ? Colors.green.shade50 : Colors.red.shade50,
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: isApproved ? Colors.green.shade200 : Colors.red.shade200),
+        border: Border.all(
+          color: isApproved ? Colors.green.shade200 : Colors.red.shade200,
+        ),
       ),
       child: Text(
         isApproved ? "Refunded" : "Refund Declined",
-        style: TextStyle(fontSize: 11, color: isApproved ? Colors.green.shade700 : Colors.red.shade700, fontWeight: FontWeight.w500),
+        style: TextStyle(
+          fontSize: 11,
+          color: isApproved ? Colors.green.shade700 : Colors.red.shade700,
+          fontWeight: FontWeight.w500,
+        ),
       ),
     );
   }
 
   Widget _productPlaceholder() {
-    return Center(child: Icon(Icons.image_outlined, size: 24, color: _secondaryText.withOpacity(0.3)));
+    return Center(
+      child: Icon(
+        Icons.image_outlined,
+        size: 24,
+        color: _secondaryText.withOpacity(0.3),
+      ),
+    );
   }
 
-  Future<void> _navigateToProduct(Map<String, dynamic> item, dynamic pid, String name) async {
+  Future<void> _navigateToProduct(
+    Map<String, dynamic> item,
+    dynamic pid,
+    String name,
+  ) async {
     try {
       final products = await _apiService.getProducts();
       final product = products.firstWhere(
@@ -582,24 +782,38 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
           String? uid = FirebaseAuth.instance.currentUser?.uid;
           if (uid == null) {
             final currentUser = AuthService().currentUser;
-            uid = currentUser?['id']?.toString() ?? currentUser?['user_id']?.toString();
+            uid =
+                currentUser?['id']?.toString() ??
+                currentUser?['user_id']?.toString();
           }
           if (uid != null) {
             final wishlist = await _apiService.getWishlist(uid);
-            final productId = (product['id'] ?? product['product_id']).toString();
-            wishlistStatus = wishlist.any((p) => (p['id'] ?? p['product_id']).toString() == productId);
+            final productId = (product['id'] ?? product['product_id'])
+                .toString();
+            wishlistStatus = wishlist.any(
+              (p) => (p['id'] ?? p['product_id']).toString() == productId,
+            );
           }
         } catch (e) {}
       }
 
       await Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => ProductDetail(product: product, initialWishlistStatus: wishlistStatus)),
+        MaterialPageRoute(
+          builder: (context) => ProductDetail(
+            product: product,
+            initialWishlistStatus: wishlistStatus,
+          ),
+        ),
       );
     } catch (e) {
       await Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => ProductDetail(product: {'product_id': pid, 'id': pid, 'name': name, ...item})),
+        MaterialPageRoute(
+          builder: (context) => ProductDetail(
+            product: {'product_id': pid, 'id': pid, 'name': name, ...item},
+          ),
+        ),
       );
     }
   }
@@ -612,13 +826,25 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Cancel Order', style: TextStyle(color: _primaryText, fontWeight: FontWeight.w500)),
-        content: Text('Are you sure you want to cancel this order?', style: TextStyle(color: _secondaryText)),
+        title: Text(
+          'Cancel Order',
+          style: TextStyle(color: _primaryText, fontWeight: FontWeight.w500),
+        ),
+        content: Text(
+          'Are you sure you want to cancel this order?',
+          style: TextStyle(color: _secondaryText),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: Text('No', style: TextStyle(color: _secondaryText))),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('No', style: TextStyle(color: _secondaryText)),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text('Yes, Cancel', style: TextStyle(color: Colors.red.shade400)),
+            child: Text(
+              'Yes, Cancel',
+              style: TextStyle(color: Colors.red.shade400),
+            ),
           ),
         ],
       ),
@@ -626,7 +852,11 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
 
     if (confirmed != true) return;
 
-    showDialog(context: context, barrierDismissible: false, builder: (context) => const Center(child: CircularProgressIndicator()));
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
 
     try {
       final success = await _apiService.cancelOrder(orderId);
@@ -634,7 +864,11 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(success ? 'Order cancelled successfully' : 'Failed to cancel order'),
+            content: Text(
+              success
+                  ? 'Order cancelled successfully'
+                  : 'Failed to cancel order',
+            ),
             backgroundColor: success ? Colors.green : Colors.red,
           ),
         );
@@ -643,22 +877,33 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     } catch (e) {
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
       }
     }
   }
 
   Color _getStatusColor(String? status) {
     switch (status?.toLowerCase()) {
-      case 'delivered': return const Color(0xFF22C55E);
-      case 'processing': return const Color(0xFF3B82F6);
-      case 'in_transit': return const Color(0xFFF59E0B);
-      case 'cancelled': return const Color(0xFFEF4444);
-      default: return _secondaryText;
+      case 'delivered':
+        return const Color(0xFF22C55E);
+      case 'processing':
+        return const Color(0xFF3B82F6);
+      case 'in_transit':
+        return const Color(0xFFF59E0B);
+      case 'cancelled':
+        return const Color(0xFFEF4444);
+      default:
+        return _secondaryText;
     }
   }
 
-  void _showRefundDialog(BuildContext context, Map<String, dynamic> order, Map<String, dynamic> item) {
+  void _showRefundDialog(
+    BuildContext context,
+    Map<String, dynamic> order,
+    Map<String, dynamic> item,
+  ) {
     final TextEditingController reasonController = TextEditingController();
     final productName = item['name'] ?? 'Product';
     final productId = item['product_id'] ?? item['id'];
@@ -701,16 +946,36 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                   children: [
                     Container(
                       padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(color: _accentColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                      child: Icon(Icons.assignment_return_outlined, color: _accentColor, size: 24),
+                      decoration: BoxDecoration(
+                        color: _accentColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        Icons.assignment_return_outlined,
+                        color: _accentColor,
+                        size: 24,
+                      ),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Request Refund', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: _primaryText)),
-                          Text('Order #$orderId', style: TextStyle(fontSize: 13, color: _secondaryText)),
+                          Text(
+                            'Request Refund',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: _primaryText,
+                            ),
+                          ),
+                          Text(
+                            'Order #$orderId',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: _secondaryText,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -734,10 +999,20 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                     children: [
                       _buildRefundInfoRow('Product', productName),
                       _buildRefundInfoRow('Quantity', quantity.toString()),
-                      _buildRefundInfoRow('Unit Price', '${unitPrice.toStringAsFixed(2)} TL'),
-                      _buildRefundInfoRow('Total Refund', '${totalPrice.toStringAsFixed(2)} TL', isHighlighted: true),
+                      _buildRefundInfoRow(
+                        'Unit Price',
+                        '${unitPrice.toStringAsFixed(2)} TL',
+                      ),
+                      _buildRefundInfoRow(
+                        'Total Refund',
+                        '${totalPrice.toStringAsFixed(2)} TL',
+                        isHighlighted: true,
+                      ),
                       if (purchaseDate != null)
-                        _buildRefundInfoRow('Days Since Purchase', '$daysSincePurchase days'),
+                        _buildRefundInfoRow(
+                          'Days Since Purchase',
+                          '$daysSincePurchase days',
+                        ),
                     ],
                   ),
                 ),
@@ -747,18 +1022,26 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: Colors.amber.shade50,
+                      color: Colors.red.shade50,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.amber.shade200),
+                      border: Border.all(color: Colors.red.shade200),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.warning_amber_rounded, color: Colors.amber.shade700, size: 20),
+                        Icon(
+                          Icons.error_outline,
+                          color: Colors.red.shade700,
+                          size: 20,
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'More than 30 days since purchase. Refund may not be eligible.',
-                            style: TextStyle(color: Colors.amber.shade800, fontSize: 12),
+                            'Refund is not eligible. More than 30 days have passed since purchase.',
+                            style: TextStyle(
+                              color: Colors.red.shade800,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ),
                       ],
@@ -767,19 +1050,39 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                 ],
 
                 const SizedBox(height: 24),
-                Text('Reason (Optional)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: _secondaryText)),
+                Text(
+                  'Reason (Optional)',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: _secondaryText,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: reasonController,
                   maxLines: 3,
                   decoration: InputDecoration(
-                    hintText: 'Please provide a reason for your refund request...',
-                    hintStyle: TextStyle(color: _secondaryText.withOpacity(0.5), fontSize: 14),
+                    hintText:
+                        'Please provide a reason for your refund request...',
+                    hintStyle: TextStyle(
+                      color: _secondaryText.withOpacity(0.5),
+                      fontSize: 14,
+                    ),
                     filled: true,
                     fillColor: Colors.white,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: _borderColor)),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: _borderColor)),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: _accentColor)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: _borderColor),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: _borderColor),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: _accentColor),
+                    ),
                     contentPadding: const EdgeInsets.all(16),
                   ),
                 ),
@@ -794,26 +1097,50 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                         style: OutlinedButton.styleFrom(
                           side: BorderSide(color: _borderColor),
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
-                        child: Text('Cancel', style: TextStyle(color: _secondaryText)),
+                        child: Text(
+                          'Cancel',
+                          style: TextStyle(color: _secondaryText),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: () async {
-                          Navigator.pop(context);
-                          await _submitRefundRequest(orderId, productId, reasonController.text);
-                        },
+                        onPressed: isWithin30Days
+                            ? () async {
+                                Navigator.pop(context);
+                                await _submitRefundRequest(
+                                  orderId,
+                                  productId,
+                                  reasonController.text,
+                                );
+                              }
+                            : null,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _accentColor,
+                          backgroundColor: isWithin30Days
+                              ? _accentColor
+                              : _secondaryText.withOpacity(0.3),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                           elevation: 0,
+                          disabledBackgroundColor: _secondaryText.withOpacity(
+                            0.3,
+                          ),
+                          disabledForegroundColor: Colors.white.withOpacity(
+                            0.5,
+                          ),
                         ),
-                        child: const Text('Submit Request', style: TextStyle(fontWeight: FontWeight.w500)),
+                        child: const Text(
+                          'Submit Request',
+                          style: TextStyle(fontWeight: FontWeight.w500),
+                        ),
                       ),
                     ),
                   ],
@@ -826,7 +1153,11 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     );
   }
 
-  Widget _buildRefundInfoRow(String label, String value, {bool isHighlighted = false}) {
+  Widget _buildRefundInfoRow(
+    String label,
+    String value, {
+    bool isHighlighted = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -846,13 +1177,25 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     );
   }
 
-  Future<void> _submitRefundRequest(dynamic orderId, dynamic productId, String reason) async {
+  Future<void> _submitRefundRequest(
+    dynamic orderId,
+    dynamic productId,
+    String reason,
+  ) async {
     try {
-      final result = await _apiService.requestRefund(orderId.toString(), productId, reason);
+      final result = await _apiService.requestRefund(
+        orderId.toString(),
+        productId,
+        reason,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result != null ? 'Refund request submitted successfully' : 'Failed to submit refund request'),
+            content: Text(
+              result != null
+                  ? 'Refund request submitted successfully'
+                  : 'Failed to submit refund request',
+            ),
             backgroundColor: result != null ? Colors.green : Colors.red,
           ),
         );
@@ -860,7 +1203,9 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
       }
     }
   }
