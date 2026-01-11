@@ -591,13 +591,10 @@ class _StoreLayoutState extends State<StoreLayout> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'All is Here',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
+                          Image.network(
+                            'https://firebasestorage.googleapis.com/v0/b/cs308db.firebasestorage.app/o/AllisHere-Logo.png?alt=media&token=e5cd3f31-b65f-4fa4-a53e-7bdcab64582d',
+                            height: 55,
+                            fit: BoxFit.contain,
                           ),
                           if (isLoggedIn)
                             Text(
@@ -957,21 +954,10 @@ class _StoreLayoutState extends State<StoreLayout> {
                       (route) => false,
                     );
                   },
-                  child: ShaderMask(
-                    shaderCallback: (bounds) => LinearGradient(
-                      colors: [
-                        const Color(0xFFFF7733),
-                        const Color(0xFFFFA366),
-                      ],
-                    ).createShader(bounds),
-                    child: const Text(
-                      'All is Here',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
+                  child: Image.network(
+                    'https://storage.googleapis.com/cs308db.firebasestorage.app/allishere-logo.jpeg',
+                    height: 55,
+                    fit: BoxFit.contain,
                   ),
                 ),
               ),
